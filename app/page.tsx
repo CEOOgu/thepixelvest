@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "./lib/supabase";
 
 const NODE_COLORS = [
   'linear-gradient(135deg, #8B5CF6, #4C1D95)', // Cyber Violet
@@ -12,7 +13,6 @@ const NODE_COLORS = [
 ];
 
 export default function Home() {
-  // UPGRADE 1: Switched from Sets to pure Arrays for bulletproof mobile rendering
   const [selectedNodes, setSelectedNodes] = useState<number[]>([]);
   const [soldSessionNodes, setSoldSessionNodes] = useState<number[]>([]);
   
@@ -26,7 +26,11 @@ export default function Home() {
   
   const [userPhone, setUserPhone] = useState("");
   const [walletBalance, setWalletBalance] = useState(0);
-  const [withdrawAmount, setWithdrawAmount] = useState("");
+
+  const [withdrawBank, setWithdrawBank] = useState("");
+  const [withdrawAccount, setWithdrawAccount] = useState("");
+  const [withdrawName, setWithdrawName] = useState("");
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
 
   const [modal, setModal] = useState({ 
     isOpen: false, 
@@ -36,6 +40,41 @@ export default function Home() {
 
   const [tempPhoneInput, setTempPhoneInput] = useState("");
 
+  const handleWithdrawRequest = async () => {
+    if (walletBalance < 200) {
+      alert("Minimum withdrawal is ₦200.");
+      return;
+    }
+    if (!withdrawBank || !withdrawAccount || !withdrawName) {
+      alert("Please fill in all bank details.");
+      return;
+    }
+    
+    setIsWithdrawing(true);
+
+    const { error } = await supabase.from('withdrawals').insert({
+      user_phone: userPhone || "Guest",
+      bank_name: withdrawBank,
+      account_number: withdrawAccount,
+      account_name: withdrawName,
+      amount: walletBalance
+    });
+
+    if (error) {
+      alert("Error submitting request: " + error.message);
+      setIsWithdrawing(false);
+      return;
+    }
+
+    alert(`Withdrawal request for ₦${walletBalance} sent successfully!`);
+    setWalletBalance(0);
+    setWithdrawBank("");
+    setWithdrawAccount("");
+    setWithdrawName("");
+    setModal({ isOpen: false, type: 'none', payload: [] });
+    setIsWithdrawing(false);
+  };
+
   const isNodeSold = (id: number) => soldSessionNodes.includes(id); 
 
   const toggleNode = (nodeId: number) => {
@@ -43,7 +82,6 @@ export default function Home() {
       alert(`Node ${nodeId} is already secured.`);
       return;
     }
-    // Instant Array manipulation triggers guaranteed re-renders
     setSelectedNodes(prev => 
       prev.includes(nodeId) 
         ? prev.filter(id => id !== nodeId) 
@@ -160,7 +198,7 @@ export default function Home() {
           transform: isSelected ? 'scale(0.92)' : 'scale(1)', transition: 'all 0.15s ease',
           boxShadow: isSelected ? '0 0 20px rgba(16,185,129,0.5)' : 'none',
           WebkitTapHighlightColor: 'transparent',
-          touchAction: 'manipulation' // UPGRADE 2: Forces instant response on Android touchscreens
+          touchAction: 'manipulation'
         }}
       >
         {nodeId}
@@ -344,53 +382,36 @@ export default function Home() {
                 </p>
 
                 {walletBalance >= 200 ? (
-                  <form 
-                    action="https://formsubmit.co/myfuturemap2@gmail.com" 
-                    method="POST" 
-                    onSubmit={(e) => {
-                      const amt = parseInt(withdrawAmount);
-                      if (!amt || amt < 200) {
-                        e.preventDefault();
-                        alert("Minimum withdrawal is ₦200.");
-                        return;
-                      }
-                      if (amt > walletBalance) {
-                        e.preventDefault();
-                        alert("You cannot withdraw more than your current wallet balance.");
-                        return;
-                      }
-                      setWalletBalance(prev => prev - amt);
-                      setWithdrawAmount("");
-                      alert(`Withdrawal of ₦${amt.toLocaleString()} Sent! We will process it shortly.`);
-                    }}
-                    style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
-                  >
-                    <input type="hidden" name="_subject" value={`Wallet Cashout Request: ₦${withdrawAmount}`} />
-                    <input type="hidden" name="_captcha" value="false" />
-                    <input type="hidden" name="_next" value="http://localhost:3000" />
-                    
-                    <input type="text" name="User_Phone" value={`Phone: ${userPhone || "Not logged in"}`} readOnly style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.1)', color: '#9CA3AF', outline: 'none', fontSize: '16px' }} />
-                    
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <input 
-                      type="number" 
-                      name="Requested_Amount" 
-                      placeholder={`Amount (Max: ₦${walletBalance})`} 
-                      value={withdrawAmount}
-                      onChange={(e) => setWithdrawAmount(e.target.value)}
-                      required 
-                      min="200"
-                      max={walletBalance}
-                      style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#10B981', outline: 'none', fontWeight: 'bold', fontSize: '16px' }} 
+                      type="text" 
+                      placeholder="Bank Name (e.g. OPay, Kuda)" 
+                      value={withdrawBank} 
+                      onChange={(e) => setWithdrawBank(e.target.value)}
+                      style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }}
                     />
-
-                    <input type="text" name="Account_Name" placeholder="Account Name" required style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }} />
-                    <input type="number" name="Account_Number" placeholder="Account Number" required style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }} />
-                    <input type="text" name="Bank_Name" placeholder="Bank Name" required style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }} />
-                    
-                    <button type="submit" style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', fontSize: '1rem', border: 'none', cursor: 'pointer', marginTop: '8px', touchAction: 'manipulation' }}>
-                      CASH OUT WALLET
+                    <input 
+                      type="text" 
+                      placeholder="10-Digit Account Number" 
+                      value={withdrawAccount} 
+                      onChange={(e) => setWithdrawAccount(e.target.value)}
+                      style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }}
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Account Name" 
+                      value={withdrawName} 
+                      onChange={(e) => setWithdrawName(e.target.value)}
+                      style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }}
+                    />
+                    <button 
+                      onClick={handleWithdrawRequest}
+                      disabled={isWithdrawing}
+                      style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', fontSize: '1rem', border: 'none', cursor: 'pointer', marginTop: '8px', touchAction: 'manipulation' }}
+                    >
+                      {isWithdrawing ? "SENDING..." : "CASH OUT WALLET"}
                     </button>
-                  </form>
+                  </div>
                 ) : (
                   <div style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '16px', padding: '24px', textAlign: 'center' }}>
                     <p style={{ color: '#FCD34D', fontSize: '0.95rem', margin: '0 0 16px 0', lineHeight: '1.5' }}>
