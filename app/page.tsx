@@ -7,12 +7,16 @@ import { supabase } from "./lib/supabase";
 const NODES_PER_PAGE = 100;
 const TOTAL_NODES = 1000000;
 
-// The B2B Ad Framework: Map node IDs to image URLs. 
-const SPONSORED_NODES: Record<number, string> = {
-  15: "https://upload.wikimedia.org/wikipedia/commons/8/84/Apple_Computer_Logo_rainbow.svg",
-  45: "https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg",
+// The B2B Ad Framework: Map node IDs to image URLs with a highlight flag
+const SPONSORED_NODES: Record<number, { url: string; highlight?: string }> = {
+  15: { 
+    url: "https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg", 
+    highlight: "0 0 0 2px #FFFFFF, 0 0 15px rgba(255,255,255,0.6)" // Crisp white border glow
+  },
+  45: { 
+    url: "https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg" 
+  },
 };
-
 // --- NAIJA STREET & ROAST ARRAY (100 ITEMS) ---
 const ROASTS = [
   // The Street & Sapa Roasts
@@ -286,7 +290,10 @@ export default function Home() {
 
     const sold = isNodeSold(nodeId);
     const isSelected = selectedNodes.includes(nodeId);
-    const sponsorImg = SPONSORED_NODES[nodeId];
+    
+    // 👇 PASTE THE UPDATED SPONSOR & STYLE LOGIC HERE 👇
+    const sponsor = SPONSORED_NODES[nodeId];
+    const sponsorImg = sponsor?.url;
     
     let bgStyle = 'linear-gradient(145deg, #FBBF24, #B45309)'; 
     let textColor = '#FEF3C7'; 
@@ -296,14 +303,15 @@ export default function Home() {
     if (sold) {
       bgStyle = '#000000'; 
       textColor = '#333333'; 
-      borderColor = '#111111';
-      shadow = 'none';
+      borderColor = sponsor?.highlight ? '#FFFFFF' : '#111111';
+      shadow = sponsor?.highlight || 'none';
     } else if (isSelected) {
       bgStyle = 'linear-gradient(145deg, #064E3B, #022C22)'; 
       textColor = '#10B981'; 
       borderColor = '#10B981';
       shadow = '0 0 15px rgba(16,185,129,0.4)';
     }
+    // 👆 END OF STYLE LOGIC 👆
 
     sectorNodes.push(
       <button 
@@ -321,7 +329,7 @@ export default function Home() {
         }}
       >
         {sponsorImg ? (
-          <img src={sponsorImg} alt={`Sponsor ${nodeId}`} style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: sold ? 0.6 : 1 }} />
+          <img src={sponsorImg} alt={`Sponsor ${nodeId}`} style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: sold ? 0.9 : 1 }} />
         ) : ( nodeId )}
       </button>
     );
