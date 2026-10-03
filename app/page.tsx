@@ -9,7 +9,7 @@ const TOTAL_NODES = 1000000;
 
 // The B2B Ad Framework: Map node IDs to image URLs. 
 const SPONSORED_NODES: Record<number, string> = {
-  15: "https://upload.wikimedia.org/wikipedia/commons/a/ab/Apple-logo.png",
+  15: "https://upload.wikimedia.org/wikipedia/commons/8/84/Apple_Computer_Logo_rainbow.svg",
   45: "https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg",
 };
 
@@ -156,11 +156,11 @@ export default function Home() {
     // 100 / 1,000,000 = 0.0001
     if (r < 0.00010) return { type: 'win', result: '₦10,000', value: 10000 };
     // 80 / 1,000,000 = 0.00008 (Cumulative: 0.00018)
-    if (r < 0.00018) return { type: 'win', result: '₦5,000', value: 5000 };
+    if (r < 0.00018) return { type: 'win', result: '₦5,000', value: 8000 };
     // 500 / 1,000,000 = 0.0005 (Cumulative: 0.00068)
-    if (r < 0.00068) return { type: 'win', result: '₦3,000', value: 3000 };
+    if (r < 0.00068) return { type: 'win', result: '₦3,000', value: 5000 };
     // 2500 / 1,000,000 = 0.0025 (Cumulative: 0.00318)
-    if (r < 0.00318) return { type: 'win', result: '₦1,000', value: 1000 };
+    if (r < 0.00318) return { type: 'win', result: '₦1,000', value: 6000 };
     // 30,000 / 1,000,000 = 0.03 (Cumulative: 0.03318)
     if (r < 0.03318) return { type: 'win', result: '₦100', value: 100 };
     // 15,000 / 1,000,000 = 0.015 (Cumulative: 0.04818)
