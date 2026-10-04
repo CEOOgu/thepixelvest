@@ -1,26 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "./lib/supabase";
 
 // --- SYSTEM CONSTANTS & B2B FRAMEWORK ---
 const NODES_PER_PAGE = 100;
 const TOTAL_NODES = 1000000;
 
-// The B2B Ad Framework: Map node IDs to image URLs with an optional white highlight
+// The B2B Ad Framework
 const SPONSORED_NODES: Record<number, { url: string; highlight?: string }> = {
   15: { 
     url: "https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg", 
-    highlight: "0 0 0 2px #FFFFFF, 0 0 15px rgba(255,255,255,0.6)" // Crisp white border glow
+    highlight: "0 0 0 2px #FFFFFF, 0 0 15px rgba(255,255,255,0.6)" 
   },
   45: { 
     url: "https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg" 
   },
 };
 
+// --- SIMULATED LIVE WINS ---
+const RECENT_WINS = [
+  { name: "0814***921", amount: "₦10,000" },
+  { name: "Emeka_V", amount: "₦2,500" },
+  { name: "0902***443", amount: "₦5,000" },
+  { name: "Odogwu", amount: "₦1,500" },
+  { name: "0803***112", amount: "₦10,000" },
+  { name: "Sarah", amount: "₦325" },
+  { name: "0706***889", amount: "₦5,000" },
+];
+
 // --- NAIJA STREET & ROAST ARRAY (100 ITEMS) ---
 const ROASTS = [
-  // The Street & Sapa Roasts
   "Sapa choke! Nothing for this node.", "Omo, you just bought an empty plot in the cloud.",
   "Premium tears. Try another node.", "Fund missing. The system swallowed it.",
   "Village people are currently pressing your remote.", "You dey find 10k inside 100 naira node? Dey play.",
@@ -30,8 +40,6 @@ const ROASTS = [
   "Even your ancestors are shaking their heads right now.", "Is this playing? What type of playing is this?",
   "Tough times never last, but this empty node is forever.", "You expected a vault, but you found a vacuum.",
   "Sapa nicely formatted in a digital square.",
-  
-  // The Crypto & Tech Bro Roasts
   "Error 404: Funds not found.", "You bought the dip, but the dip kept dipping.",
   "Your portfolio just took a screenshot.", "Market is red. This node is too.",
   "Investor, your investment just entered voicemail.", "Liquidity zero. Try again.",
@@ -39,8 +47,6 @@ const ROASTS = [
   "Your Wi-Fi is strong, but your luck is weak.", "Tech bro, you just debugged an empty array.",
   "This sector has been wiped clean.", "Ping timeout. The money did not respond.",
   "Transaction successful: You bought premium air.",
-  
-  // Sarcastic Motivation & Quotes
   "They say money cannot buy happiness. This node cannot buy anything either.",
   "Rome wasn't built in a day, and your wealth won't be built on this node.",
   "The reward for hard work is more work. Click another node.",
@@ -51,14 +57,10 @@ const ROASTS = [
   "Shoot for the moon! But you landed on an empty digital square.",
   "Believe in yourself, because this node definitely doesn't.",
   "A journey of a thousand miles begins with a single lost node.",
-  
-  // Direct & Ruthless
   "Nothing here. Move on.", "Absolutely zero naira.", "Ouch. That was a waste of 100 bucks.",
   "Better luck next time. Or maybe not.", "The vault is locked. You don't have the key.",
   "You just bought a 1x1 pixel of disappointment.", "Nothing to see here, CEO.",
   "Grid says no.", "Try again. The system is hungry.", "Mission failed. We'll get 'em next time.",
-  
-  // University & Student Roasts
   "Carryover loaded. No funds here.", "Your CGPA is crying, and this node is empty too.",
   "Lecturer said no. The grid says no too.", "This node is as empty as a 100L student's pocket on a Friday.",
   "You thought this was a scholarship? Dey play.", "Read your books! You are here looking for 10k.",
@@ -67,8 +69,6 @@ const ROASTS = [
   "Expulsion from the vault! No cash for you.", "This node has gone on strike. ASUU style.",
   "Missing script! Your money cannot be found.", "You studied for the wrong course. Empty node.",
   "First class in spending 100 naira, third class in winning.",
-  
-  // Relationship & Heartbreak Roasts
   "She served you breakfast, now the grid is serving you too.", "This node is as empty as your ex's promises.",
   "You got ghosted by the vault.", "Red flag! Do not expect money from this square.",
   "It's not you, it's the node. Actually, it's you.", "Your crush doesn't like you, and this grid doesn't either.",
@@ -76,16 +76,12 @@ const ROASTS = [
   "She said she needs space, so the grid gave you an empty one.", "Stop texting her and stop clicking empty nodes.",
   "Another talking stage that led to nowhere.", "You gave the grid your heart, it gave you zero naira.",
   "Even your ex wouldn't want this node.",
-  
-  // Naija Pop Culture & Street Slang
   "Idan doesn't beg, but Idan just lost 100 naira.", "Who goes you? Not this node.",
   "You have been restricted from enjoying this wealth.", "No evidence, you go explain tire.",
   "Let the poor breathe! But this node is choking.", "E choke! But no money drop.",
   "Wahala for who no win 10k.", "Just dey play. Play play 100 naira don go.",
   "Odogwu, your funds have been intercepted.", "You never see anything. Click another one.",
   "Tears in the metaverse.", "Agba baller just kicked the ball into the bush.",
-  
-  // Hardcore Finance & Business
   "Margin call! Your account has been liquidated.", "Bear market activated on this specific node.",
   "This node was audited and found completely bankrupt.", "Venture capital denied. Try bootstrapping.",
   "Your ROI on this node is exactly zero.", "Server maintenance: We removed the money.",
@@ -100,6 +96,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentSectorStart, setCurrentSectorStart] = useState(1);
+  const [currentWinIdx, setCurrentWinIdx] = useState(0);
   
   // --- AUTH & WALLET STATE ---
   const [userIdentifier, setUserIdentifier] = useState(""); 
@@ -131,6 +128,14 @@ export default function Home() {
   const [tempAuthInput, setTempAuthInput] = useState("");
   const [tempPassInput, setTempPassInput] = useState("");
 
+  // --- LOGIC: LIVE WIN TRACKER ANIMATION ---
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentWinIdx((prev) => (prev + 1) % RECENT_WINS.length);
+    }, 4000); // Cycles every 4 seconds
+    return () => clearInterval(interval);
+  }, []);
+
   // --- LOGIC: BULK DISCOUNT ---
   const calculateCost = (count: number) => {
     if (count >= 20) return count * 80; 
@@ -143,10 +148,10 @@ export default function Home() {
 
   // --- LOGIC: VIRAL SHARE ---
   const handleShare = async () => {
-    const text = `I just secured nodes on The Pixel Vest digital grid! Claim your territory and extract the vault.`;
+    const text = `Want to win instant cash? 💸 I am playing on The Pixel Vest. You just buy a digital spot on the grid for ₦100 and you can win cash prizes up to ₦1,000,000 instantly. Withdraw straight to your bank account! 🚀`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'The Pixel Vest', text: text, url: window.location.href });
+        await navigator.share({ title: 'The Pixel Vest - Win Cash Instantly', text: text, url: window.location.href });
       } catch (err) {
         console.log("Error sharing", err);
       }
@@ -157,28 +162,24 @@ export default function Home() {
 
   // --- LOGIC: DETERMINISTIC / STATIC PRIZE DISTRIBUTION ---
   const determineNodeOutcome = (nodeId: number) => {
-    // Knuth's multiplicative hash ensures the prize is permanently locked to the Node ID
-    // until changed by a future admin database.
     let hash = (nodeId * 2654435761) % 4294967296;
     let r = hash / 4294967296; 
     
-    // Cumulative probabilities based on exactly 1,000,000 nodes.
-    if (r < 0.0002) return { type: 'win', result: '₦10,000', value: 10000 };          // 200 nodes
-    if (r < 0.00035) return { type: 'win', result: '₦5,000', value: 5000 };           // 150 nodes
-    if (r < 0.00065) return { type: 'win', result: '₦2,500', value: 2500 };           // 300 nodes
-    if (r < 0.00265) return { type: 'win', result: '₦1,500', value: 1500 };           // 2000 nodes
-    if (r < 0.00765) return { type: 'win', result: '₦1,000', value: 1000 };           // 5000 nodes
-    if (r < 0.00865) return { type: 'win', result: '₦325', value: 325 };              // 1000 nodes
-    if (r < 0.03865) return { type: 'win', result: '₦200', value: 200 };              // 30000 nodes
-    if (r < 0.05365) return { type: 'win', result: '₦70', value: 70 };                // 15000 nodes
-    if (r < 0.09865) return { type: 'win', result: '₦60', value: 60 };                // 45000 nodes
-    if (r < 0.14365) return { type: 'win', result: '₦50', value: 50 };                // 45000 nodes
-    if (r < 0.16365) return { type: 'win', result: '₦30', value: 30 };                // 20000 nodes
-    if (r < 0.16865) return { type: 'win', result: '₦25', value: 25 };                // 5000 nodes
-    if (r < 0.18365) return { type: 'win', result: '₦20', value: 20 };                // 15000 nodes
-    if (r < 0.19865) return { type: 'win', result: '₦10', value: 10 };                // 15000 nodes
+    if (r < 0.0002) return { type: 'win', result: '₦10,000', value: 10000 };
+    if (r < 0.00035) return { type: 'win', result: '₦5,000', value: 5000 };
+    if (r < 0.00065) return { type: 'win', result: '₦2,500', value: 2500 };
+    if (r < 0.00265) return { type: 'win', result: '₦1,500', value: 1500 };
+    if (r < 0.00765) return { type: 'win', result: '₦1,000', value: 1000 };
+    if (r < 0.00865) return { type: 'win', result: '₦325', value: 325 };
+    if (r < 0.03865) return { type: 'win', result: '₦200', value: 200 };
+    if (r < 0.05365) return { type: 'win', result: '₦70', value: 70 };
+    if (r < 0.09865) return { type: 'win', result: '₦60', value: 60 };
+    if (r < 0.14365) return { type: 'win', result: '₦50', value: 50 };
+    if (r < 0.16365) return { type: 'win', result: '₦30', value: 30 };
+    if (r < 0.16865) return { type: 'win', result: '₦25', value: 25 };
+    if (r < 0.18365) return { type: 'win', result: '₦20', value: 20 };
+    if (r < 0.19865) return { type: 'win', result: '₦10', value: 10 };
     
-    // Remaining ~80.135% Loss. Roast is also tied statically to the Node ID!
     const roastIndex = nodeId % ROASTS.length;
     return { type: 'loss', result: ROASTS[roastIndex], value: 0 };
   };
@@ -315,7 +316,7 @@ export default function Home() {
           cursor: sold ? 'not-allowed' : 'pointer', border: `2px solid ${borderColor}`,
           transform: isSelected ? 'scale(0.92)' : 'scale(1)', transition: 'all 0.2s ease',
           boxShadow: shadow, WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation',
-          position: 'relative', overflow: 'hidden', padding: sponsorImg ? '6px' : '0' 
+          position: 'relative', overflow: 'hidden', padding: sponsorImg ? '6px' : '0', boxSizing: 'border-box'
         }}
       >
         {sponsorImg ? (
@@ -325,11 +326,12 @@ export default function Home() {
     );
   }
 
+  // --- STRICT MOBILE LOCK CSS ---
   return (
-    <main style={{ backgroundColor: '#030712', minHeight: '100vh', width: '100%', maxWidth: '480px', margin: '0 auto', color: '#ffffff', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '120px', position: 'relative' }}>
+    <main style={{ backgroundColor: '#030712', minHeight: '100vh', width: '100%', maxWidth: '480px', margin: '0 auto', color: '#ffffff', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '120px', position: 'relative', overflowX: 'hidden', boxSizing: 'border-box' }}>
       
       {/* HEADER */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 40, backgroundColor: 'rgba(3, 7, 18, 0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '16px', paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 40, backgroundColor: 'rgba(3, 7, 18, 0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '16px', paddingTop: 'max(16px, env(safe-area-inset-top))', boxSizing: 'border-box', width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <h1 style={{ fontSize: '1.3rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>The Pixel Vest</h1>
           <button 
@@ -341,10 +343,10 @@ export default function Home() {
           </button>
         </div>
 
-        <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} style={{ display: 'flex', gap: '8px', margin: 0 }}>
+        <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} style={{ display: 'flex', gap: '8px', margin: 0, width: '100%', boxSizing: 'border-box' }}>
           <input 
             type="number" placeholder="Search Node (1 - 1M)" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ flex: 1, padding: '14px 16px', borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }}
+            style={{ flex: 1, padding: '14px 16px', borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px', boxSizing: 'border-box', minWidth: '0' }}
           />
           <button type="submit" style={{ padding: '0 20px', borderRadius: '12px', backgroundColor: '#FBBF24', color: '#000', fontWeight: '900', border: 'none', cursor: 'pointer', fontSize: '0.95rem' }}>
             FIND
@@ -352,8 +354,18 @@ export default function Home() {
         </form>
       </div>
 
+      {/* FLOATING LIVE WIN TRACKER */}
+      <div style={{ position: 'absolute', top: '130px', left: '0', right: '0', zIndex: 35, display: 'flex', justifyContent: 'center', pointerEvents: 'none', padding: '0 16px' }}>
+        <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '20px', padding: '6px 16px', display: 'flex', alignItems: 'center', gap: '8px', backdropFilter: 'blur(8px)', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', transition: 'opacity 0.3s ease' }}>
+          <span style={{ height: '8px', width: '8px', backgroundColor: '#10B981', borderRadius: '50%', display: 'inline-block', boxShadow: '0 0 8px #10B981', animation: 'pulse 2s infinite' }}></span>
+          <p style={{ margin: 0, fontSize: '0.75rem', color: '#E5E7EB', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+            {RECENT_WINS[currentWinIdx].name} secured <span style={{ color: '#10B981' }}>{RECENT_WINS[currentWinIdx].amount}</span>
+          </p>
+        </div>
+      </div>
+
       {/* SALES HOOK */}
-      <div style={{ padding: '32px 20px 24px 20px', textAlign: 'center' }}>
+      <div style={{ padding: '48px 20px 24px 20px', textAlign: 'center', boxSizing: 'border-box', width: '100%' }}>
         <div style={{ display: 'inline-block', backgroundColor: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', padding: '6px 12px', borderRadius: '20px', marginBottom: '16px' }}>
           <p style={{ color: '#FBBF24', fontSize: '0.75rem', fontWeight: '900', letterSpacing: '1px', margin: 0, textTransform: 'uppercase' }}>Live Grid • 1,000,000 Nodes</p>
         </div>
@@ -370,14 +382,14 @@ export default function Home() {
       </div>
 
       {/* RESPONSIVE CSS GRID */}
-      <div style={{ padding: '0 16px 16px 16px' }}>
+      <div style={{ padding: '0 16px 16px 16px', boxSizing: 'border-box', width: '100%' }}>
         {currentSectorStart > 1 && (
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
             <button onClick={() => { setCurrentSectorStart(Math.max(1, currentSectorStart - NODES_PER_PAGE)); window.scrollTo({ top: 0, behavior: 'smooth' }); }} style={{ backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '12px 24px', borderRadius: '20px', fontWeight: 'bold', cursor: 'pointer' }}>↑ Load Previous 100</button>
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', width: '100%' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
           {sectorNodes}
         </div>
 
@@ -389,7 +401,7 @@ export default function Home() {
       </div>
 
       {/* B2B & REWARDS FOOTER */}
-      <div style={{ padding: '24px 16px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: '32px', marginBottom: '32px' }}>
+      <div style={{ padding: '24px 16px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: '32px', marginBottom: '32px', boxSizing: 'border-box', width: '100%' }}>
         <div style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '16px', padding: '20px', marginBottom: '16px' }}>
           <h3 style={{ margin: '0 0 8px 0', fontSize: '1rem', color: '#FBBF24', textTransform: 'uppercase', letterSpacing: '1px' }}>💼 Brand Your Own Node</h3>
           <p style={{ margin: 0, fontSize: '0.85rem', color: '#9CA3AF', lineHeight: '1.6' }}>
@@ -398,15 +410,15 @@ export default function Home() {
             <a href="mailto:emmaoguogu@gmail.com" style={{ color: '#10B981', fontWeight: 'bold', textDecoration: 'none', display: 'inline-block', marginTop: '4px', fontSize: '0.95rem' }}>emmaoguogu@gmail.com</a>
           </p>
         </div>
-        <button onClick={handleShare} style={{ width: '100%', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#10B981', padding: '16px', borderRadius: '16px', fontWeight: '900', fontSize: '0.95rem', cursor: 'pointer', transition: 'all 0.2s ease' }}>
+        <button onClick={handleShare} style={{ width: '100%', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#10B981', padding: '16px', borderRadius: '16px', fontWeight: '900', fontSize: '0.95rem', cursor: 'pointer', transition: 'all 0.2s ease', boxSizing: 'border-box' }}>
           🎁 SHARE TO GET A FREE TRIAL
         </button>
       </div>
 
       {/* CART OVERLAY */}
       {selectedNodes.length > 0 && (
-        <div style={{ position: 'fixed', bottom: '0', left: '0', right: '0', zIndex: 50, padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))', display: 'flex', justifyContent: 'center', pointerEvents: 'none' }}>
-          <div style={{ width: '100%', maxWidth: '448px', backgroundColor: 'rgba(15, 23, 42, 0.98)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 -10px 40px rgba(0,0,0,0.8)', backdropFilter: 'blur(16px)', pointerEvents: 'auto' }}>
+        <div style={{ position: 'fixed', bottom: '0', left: '0', right: '0', zIndex: 50, padding: '16px', paddingBottom: 'max(16px, env(safe-area-inset-bottom))', display: 'flex', justifyContent: 'center', pointerEvents: 'none', boxSizing: 'border-box' }}>
+          <div style={{ width: '100%', maxWidth: '448px', backgroundColor: 'rgba(15, 23, 42, 0.98)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 -10px 40px rgba(0,0,0,0.8)', backdropFilter: 'blur(16px)', pointerEvents: 'auto', boxSizing: 'border-box' }}>
             <div>
               <p style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#9CA3AF', margin: 0 }}>CART {selectedNodes.length >= 10 && <span style={{color: '#10B981'}}> (DISCOUNT APPLIED)</span>}</p>
               <p style={{ fontSize: '1.1rem', fontWeight: '900', margin: '4px 0 0 0' }}>{selectedNodes.length} Nodes • ₦{cartCost.toLocaleString()}</p>
@@ -421,18 +433,18 @@ export default function Home() {
 
       {/* GLOBAL MODALS */}
       {modal.isOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(16px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div style={{ backgroundColor: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', width: '100%', maxWidth: '400px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(16px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box' }}>
+          <div style={{ backgroundColor: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', width: '100%', maxWidth: '400px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)', boxSizing: 'border-box' }}>
             
             {/* LOGIN MODAL */}
             {modal.type === 'login' && (
               <div style={{ padding: '32px 24px', textAlign: 'center' }}>
                 <h2 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', fontWeight: '900' }}>Authentication</h2>
                 <p style={{ color: '#9CA3AF', fontSize: '0.9rem', marginBottom: '24px', lineHeight: '1.5' }}>Enter your Phone or Email to secure your nodes.</p>
-                <input type="text" placeholder="Email or Phone Number" value={tempAuthInput} onChange={(e) => setTempAuthInput(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', marginBottom: '12px', fontSize: '16px' }} />
-                <input type="password" placeholder="Password (Optional)" value={tempPassInput} onChange={(e) => setTempPassInput(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', marginBottom: '24px', fontSize: '16px' }} />
-                <button onClick={() => { if(tempAuthInput.length > 5) { setUserIdentifier(tempAuthInput); setUserPassword(tempPassInput); triggerCheckout(false); } else alert("Please enter a valid Phone or Email."); }} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', fontSize: '1rem', border: 'none', cursor: 'pointer' }}>SECURE ACCOUNT</button>
-                <button onClick={() => setModal({ isOpen: false, type: 'none', payload: [] })} style={{ width: '100%', backgroundColor: 'transparent', color: '#9CA3AF', padding: '16px', marginTop: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>Cancel</button>
+                <input type="text" placeholder="Email or Phone Number" value={tempAuthInput} onChange={(e) => setTempAuthInput(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', marginBottom: '12px', fontSize: '16px', boxSizing: 'border-box' }} />
+                <input type="password" placeholder="Password (Optional)" value={tempPassInput} onChange={(e) => setTempPassInput(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', marginBottom: '24px', fontSize: '16px', boxSizing: 'border-box' }} />
+                <button onClick={() => { if(tempAuthInput.length > 5) { setUserIdentifier(tempAuthInput); setUserPassword(tempPassInput); triggerCheckout(false); } else alert("Please enter a valid Phone or Email."); }} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', fontSize: '1rem', border: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>SECURE ACCOUNT</button>
+                <button onClick={() => setModal({ isOpen: false, type: 'none', payload: [] })} style={{ width: '100%', backgroundColor: 'transparent', color: '#9CA3AF', padding: '16px', marginTop: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>Cancel</button>
               </div>
             )}
 
@@ -478,11 +490,11 @@ export default function Home() {
                 {withdrawType === 'bank' && (
                   walletBalance >= 200 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
-                      <input type="text" placeholder="Bank Name (e.g. OPay, Moniepoint)" value={withdrawBank} onChange={(e) => setWithdrawBank(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }} />
-                      <input type="text" placeholder="10-Digit Account Number" value={withdrawAccount} onChange={(e) => setWithdrawAccount(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }} />
-                      <input type="text" placeholder="Account Name" value={withdrawName} onChange={(e) => setWithdrawName(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }} />
-                      <input type="number" placeholder={`Amount (Max: ₦${walletBalance})`} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }} />
-                      <button onClick={initiateWithdrawal} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', fontSize: '1rem', border: 'none', cursor: 'pointer', marginTop: '8px' }}>TRANSFER FUNDS</button>
+                      <input type="text" placeholder="Bank Name (e.g. OPay, Moniepoint)" value={withdrawBank} onChange={(e) => setWithdrawBank(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px', boxSizing: 'border-box' }} />
+                      <input type="text" placeholder="10-Digit Account Number" value={withdrawAccount} onChange={(e) => setWithdrawAccount(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px', boxSizing: 'border-box' }} />
+                      <input type="text" placeholder="Account Name" value={withdrawName} onChange={(e) => setWithdrawName(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px', boxSizing: 'border-box' }} />
+                      <input type="number" placeholder={`Amount (Max: ₦${walletBalance})`} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px', boxSizing: 'border-box' }} />
+                      <button onClick={initiateWithdrawal} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', fontSize: '1rem', border: 'none', cursor: 'pointer', marginTop: '8px', boxSizing: 'border-box' }}>TRANSFER FUNDS</button>
                     </div>
                   ) : (
                     <div style={{ backgroundColor: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: '16px', padding: '24px', textAlign: 'center', marginBottom: '32px' }}>
@@ -493,15 +505,15 @@ export default function Home() {
 
                 {withdrawType === 'airtime' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
-                    <select value={airtimeNetwork} onChange={(e) => setAirtimeNetwork(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px', appearance: 'none' }}>
+                    <select value={airtimeNetwork} onChange={(e) => setAirtimeNetwork(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px', appearance: 'none', boxSizing: 'border-box' }}>
                       <option value="MTN">MTN NG</option>
                       <option value="AIRTEL">AIRTEL NG</option>
                       <option value="GLO">GLO NG</option>
                       <option value="9MOBILE">9MOBILE NG</option>
                     </select>
-                    <input type="tel" placeholder="Destination Phone (e.g. 080...)" value={airtimePhone} onChange={(e) => setAirtimePhone(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }} />
-                    <input type="number" placeholder={`Amount (Max: ₦${walletBalance})`} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }} />
-                    <button onClick={initiateWithdrawal} disabled={walletBalance === 0} style={{ width: '100%', backgroundColor: '#F59E0B', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', fontSize: '1rem', border: 'none', cursor: walletBalance === 0 ? 'not-allowed' : 'pointer', marginTop: '8px', opacity: walletBalance === 0 ? 0.5 : 1 }}>SEND AIRTIME</button>
+                    <input type="tel" placeholder="Destination Phone (e.g. 080...)" value={airtimePhone} onChange={(e) => setAirtimePhone(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px', boxSizing: 'border-box' }} />
+                    <input type="number" placeholder={`Amount (Max: ₦${walletBalance})`} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px', boxSizing: 'border-box' }} />
+                    <button onClick={initiateWithdrawal} disabled={walletBalance === 0} style={{ width: '100%', backgroundColor: '#F59E0B', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', fontSize: '1rem', border: 'none', cursor: walletBalance === 0 ? 'not-allowed' : 'pointer', marginTop: '8px', opacity: walletBalance === 0 ? 0.5 : 1, boxSizing: 'border-box' }}>SEND AIRTIME</button>
                   </div>
                 )}
 
@@ -524,9 +536,9 @@ export default function Home() {
               <div style={{ padding: '32px 24px', textAlign: 'center' }}>
                 <h2 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', fontWeight: '900' }}>Setup Security PIN</h2>
                 <p style={{ color: '#9CA3AF', fontSize: '0.9rem', marginBottom: '24px', lineHeight: '1.5' }}>Create a 4-digit PIN to secure your withdrawals.</p>
-                <input type="password" maxLength={4} placeholder="••••" value={tempPin} onChange={(e) => setTempPin(e.target.value.replace(/\D/g, ''))} style={{ width: '120px', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', outline: 'none', marginBottom: '24px', fontSize: '24px', textAlign: 'center', letterSpacing: '8px' }} />
-                <button onClick={() => { if(tempPin.length === 4) { setSavedPin(tempPin); setHasPin(true); setTempPin(""); setModal({ isOpen: true, type: 'pin-confirm', payload: [] }); } else alert("PIN must be exactly 4 digits."); }} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', border: 'none', cursor: 'pointer' }}>SAVE & CONTINUE</button>
-                <button onClick={() => { setTempPin(""); setModal({ isOpen: true, type: 'withdraw', payload: [] }); }} style={{ width: '100%', backgroundColor: 'transparent', color: '#9CA3AF', padding: '16px', marginTop: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>Cancel</button>
+                <input type="password" maxLength={4} placeholder="••••" value={tempPin} onChange={(e) => setTempPin(e.target.value.replace(/\D/g, ''))} style={{ width: '120px', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', outline: 'none', marginBottom: '24px', fontSize: '24px', textAlign: 'center', letterSpacing: '8px', boxSizing: 'border-box' }} />
+                <button onClick={() => { if(tempPin.length === 4) { setSavedPin(tempPin); setHasPin(true); setTempPin(""); setModal({ isOpen: true, type: 'pin-confirm', payload: [] }); } else alert("PIN must be exactly 4 digits."); }} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', border: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>SAVE & CONTINUE</button>
+                <button onClick={() => { setTempPin(""); setModal({ isOpen: true, type: 'withdraw', payload: [] }); }} style={{ width: '100%', backgroundColor: 'transparent', color: '#9CA3AF', padding: '16px', marginTop: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>Cancel</button>
               </div>
             )}
 
@@ -535,9 +547,9 @@ export default function Home() {
               <div style={{ padding: '32px 24px', textAlign: 'center' }}>
                 <h2 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', fontWeight: '900' }}>Enter PIN</h2>
                 <p style={{ color: '#9CA3AF', fontSize: '0.9rem', marginBottom: '24px', lineHeight: '1.5' }}>Authorize this transaction.</p>
-                <input type="password" maxLength={4} placeholder="••••" value={tempPin} onChange={(e) => setTempPin(e.target.value.replace(/\D/g, ''))} style={{ width: '120px', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', outline: 'none', marginBottom: '24px', fontSize: '24px', textAlign: 'center', letterSpacing: '8px' }} />
-                <button onClick={() => { if(tempPin === savedPin) { setTempPin(""); executeWithdrawal(); } else alert("Incorrect PIN."); }} disabled={isWithdrawing} style={{ width: '100%', backgroundColor: '#F59E0B', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', border: 'none', cursor: 'pointer' }}>{isWithdrawing ? "AUTHORIZING..." : "CONFIRM"}</button>
-                <button onClick={() => { setTempPin(""); setModal({ isOpen: true, type: 'withdraw', payload: [] }); }} disabled={isWithdrawing} style={{ width: '100%', backgroundColor: 'transparent', color: '#9CA3AF', padding: '16px', marginTop: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>Cancel</button>
+                <input type="password" maxLength={4} placeholder="••••" value={tempPin} onChange={(e) => setTempPin(e.target.value.replace(/\D/g, ''))} style={{ width: '120px', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', outline: 'none', marginBottom: '24px', fontSize: '24px', textAlign: 'center', letterSpacing: '8px', boxSizing: 'border-box' }} />
+                <button onClick={() => { if(tempPin === savedPin) { setTempPin(""); executeWithdrawal(); } else alert("Incorrect PIN."); }} disabled={isWithdrawing} style={{ width: '100%', backgroundColor: '#F59E0B', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', border: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>{isWithdrawing ? "AUTHORIZING..." : "CONFIRM"}</button>
+                <button onClick={() => { setTempPin(""); setModal({ isOpen: true, type: 'withdraw', payload: [] }); }} disabled={isWithdrawing} style={{ width: '100%', backgroundColor: 'transparent', color: '#9CA3AF', padding: '16px', marginTop: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>Cancel</button>
               </div>
             )}
 
