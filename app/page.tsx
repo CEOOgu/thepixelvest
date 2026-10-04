@@ -7,7 +7,6 @@ import { supabase } from "./lib/supabase";
 const NODES_PER_PAGE = 100;
 const TOTAL_NODES = 1000000;
 
-// The B2B Ad Framework
 const SPONSORED_NODES: Record<number, { url: string; highlight?: string }> = {
   15: { 
     url: "https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg", 
@@ -98,6 +97,10 @@ export default function Home() {
   const [currentSectorStart, setCurrentSectorStart] = useState(1);
   const [currentWinIdx, setCurrentWinIdx] = useState(0);
   
+  // --- APP INSTALL (PWA) STATE ---
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isIOS, setIsIOS] = useState(false);
+
   // --- AUTH & WALLET STATE ---
   const [userIdentifier, setUserIdentifier] = useState(""); 
   const [userPassword, setUserPassword] = useState("");
@@ -128,13 +131,43 @@ export default function Home() {
   const [tempAuthInput, setTempAuthInput] = useState("");
   const [tempPassInput, setTempPassInput] = useState("");
 
-  // --- LOGIC: LIVE WIN TRACKER ANIMATION ---
+  // --- LOGIC: INITIALIZATION & EFFECTS ---
   useEffect(() => {
+    // Live Win Tracker Interval
     const interval = setInterval(() => {
       setCurrentWinIdx((prev) => (prev + 1) % RECENT_WINS.length);
-    }, 4000); // Cycles every 4 seconds
-    return () => clearInterval(interval);
+    }, 4000);
+
+    // PWA Install Prompt Listener
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // Check if user is on iOS for custom install instructions
+    const ua = window.navigator.userAgent;
+    const isIOSDevice = !!ua.match(/iPad/i) || !!ua.match(/iPhone/i);
+    setIsIOS(isIOSDevice);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
   }, []);
+
+  const handleAppInstall = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    } else {
+      // If prompt isn't available (like on iOS or already installed), show manual instructions
+      setModal({ isOpen: true, type: 'install-help', payload: [] });
+    }
+  };
 
   // --- LOGIC: BULK DISCOUNT ---
   const calculateCost = (count: number) => {
@@ -364,8 +397,15 @@ export default function Home() {
         </div>
       </div>
 
-      {/* SALES HOOK */}
+      {/* SALES HOOK & APP DOWNLOAD */}
       <div style={{ padding: '48px 20px 24px 20px', textAlign: 'center', boxSizing: 'border-box', width: '100%' }}>
+        
+        {/* DOWNLOAD APP BUTTON */}
+        <button onClick={handleAppInstall} style={{ backgroundColor: '#2563EB', color: '#ffffff', padding: '8px 16px', borderRadius: '20px', fontWeight: 'bold', fontSize: '0.8rem', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', margin: '0 auto 24px auto', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)' }}>
+          📲 INSTALL APP
+        </button>
+        <br/>
+
         <div style={{ display: 'inline-block', backgroundColor: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', padding: '6px 12px', borderRadius: '20px', marginBottom: '16px' }}>
           <p style={{ color: '#FBBF24', fontSize: '0.75rem', fontWeight: '900', letterSpacing: '1px', margin: 0, textTransform: 'uppercase' }}>Live Grid • 1,000,000 Nodes</p>
         </div>
@@ -379,6 +419,13 @@ export default function Home() {
           Secure an exclusive digital node for <strong>₦100</strong>. Uncover hidden cash bounties instantly, or hold your plot. Cash out directly to your bank or as airtime. 
         </p>
         <p style={{ color: '#10B981', fontSize: '0.85rem', fontWeight: 'bold' }}>⚡ Bulk Buy: 10+ (10% Off) | 20+ (20% Off)</p>
+      </div>
+
+      {/* ADVERTISEMENT PLACEHOLDER (ABOVE GRID) */}
+      <div style={{ padding: '0 16px 16px 16px', boxSizing: 'border-box', width: '100%', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ width: '100%', maxWidth: '320px', height: '50px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(255,255,255,0.15)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4B5563', fontSize: '0.7rem', fontWeight: 'bold', letterSpacing: '1px' }}>
+          SPONSORED AD SPACE
+        </div>
       </div>
 
       {/* RESPONSIVE CSS GRID */}
@@ -436,6 +483,28 @@ export default function Home() {
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(16px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box' }}>
           <div style={{ backgroundColor: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', width: '100%', maxWidth: '400px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)', boxSizing: 'border-box' }}>
             
+            {/* INSTALL INSTRUCTIONS MODAL */}
+            {modal.type === 'install-help' && (
+              <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+                <h2 style={{ margin: '0 0 16px 0', fontSize: '1.5rem', fontWeight: '900' }}>Install The Pixel Vest</h2>
+                {isIOS ? (
+                  <p style={{ color: '#9CA3AF', fontSize: '1rem', lineHeight: '1.6', marginBottom: '24px' }}>
+                    To install the app on your iPhone:<br/><br/>
+                    1. Tap the <strong>Share</strong> button at the bottom of Safari.<br/>
+                    2. Scroll down and tap <strong>"Add to Home Screen"</strong>.<br/>
+                    3. Tap <strong>"Add"</strong> in the top right.
+                  </p>
+                ) : (
+                  <p style={{ color: '#9CA3AF', fontSize: '1rem', lineHeight: '1.6', marginBottom: '24px' }}>
+                    To install the app on your phone:<br/><br/>
+                    1. Tap the <strong>3 dots (Menu)</strong> in your browser.<br/>
+                    2. Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong>.
+                  </p>
+                )}
+                <button onClick={() => setModal({ isOpen: false, type: 'none', payload: [] })} style={{ width: '100%', backgroundColor: '#2563EB', color: '#fff', padding: '16px', borderRadius: '16px', fontWeight: '900', border: 'none', cursor: 'pointer' }}>GOT IT</button>
+              </div>
+            )}
+
             {/* LOGIN MODAL */}
             {modal.type === 'login' && (
               <div style={{ padding: '32px 24px', textAlign: 'center' }}>

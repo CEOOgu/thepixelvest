@@ -3,7 +3,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "The Pixel Vest",
-  description: "Secure your allocation. Uncover high-yield assets.",
+  description: "Win Cash Instantly on the Digital Grid",
+  manifest: "/manifest.json", 
 };
 
 export default function RootLayout({
