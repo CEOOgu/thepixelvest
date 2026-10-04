@@ -296,7 +296,7 @@ export default function Home() {
       setModal({ isOpen: true, type: 'reveal', payload: revealPayload });
       setSelectedNodes([]); 
     } catch (error: any) {
-      alert("Transaction failed! A node might already be taken. Refreshing grid...");
+      alert("Transaction failed: " + error.message);
       const { data } = await supabase.from('secured_nodes').select('node_id');
       if (data) setSoldSessionNodes(data.map(n => n.node_id));
       setSelectedNodes([]);
