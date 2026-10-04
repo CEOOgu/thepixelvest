@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "./lib/supabase";
+import { usePaystackPayment } from "react-paystack";
 
 // --- SYSTEM CONSTANTS & B2B FRAMEWORK ---
 const NODES_PER_PAGE = 100;
@@ -17,15 +18,23 @@ const SPONSORED_NODES: Record<number, { url: string; highlight?: string }> = {
   },
 };
 
-// --- SIMULATED LIVE WINS ---
+// --- SIMULATED LIVE WINS (Expanded to 30 Items) ---
 const RECENT_WINS = [
-  { name: "0814***921", amount: "₦10,000" },
-  { name: "Emeka_V", amount: "₦2,500" },
-  { name: "0902***443", amount: "₦5,000" },
-  { name: "Odogwu", amount: "₦1,500" },
-  { name: "0803***112", amount: "₦10,000" },
-  { name: "Sarah", amount: "₦325" },
-  { name: "0706***889", amount: "₦5,000" },
+  { name: "0814***921", amount: "₦10,000" }, { name: "Emeka_V", amount: "₦2,500" },
+  { name: "0902***443", amount: "₦5,000" }, { name: "Odogwu", amount: "₦1,500" },
+  { name: "0803***112", amount: "₦10,000" }, { name: "Sarah", amount: "₦325" },
+  { name: "0706***889", amount: "₦5,000" }, { name: "Idan", amount: "₦1,000" },
+  { name: "0811***742", amount: "₦325" }, { name: "BigTech", amount: "₦10,000" },
+  { name: "0912***331", amount: "₦200" }, { name: "Chuks", amount: "₦1,500" },
+  { name: "0703***998", amount: "₦5,000" }, { name: "Aisha", amount: "₦2,500" },
+  { name: "0805***445", amount: "₦1,000" }, { name: "Pablo", amount: "₦10,000" },
+  { name: "0909***221", amount: "₦500" }, { name: "BossLady", amount: "₦5,000" },
+  { name: "0813***556", amount: "₦1,500" }, { name: "Wizzy", amount: "₦325" },
+  { name: "0708***774", amount: "₦2,500" }, { name: "Precious", amount: "₦10,000" },
+  { name: "0904***112", amount: "₦1,000" }, { name: "Obi", amount: "₦5,000" },
+  { name: "0802***889", amount: "₦325" }, { name: "Investor", amount: "₦1,500" },
+  { name: "0816***334", amount: "₦10,000" }, { name: "Mercy", amount: "₦500" },
+  { name: "0913***667", amount: "₦2,500" }, { name: "TechBro", amount: "₦5,000" }
 ];
 
 // --- FULL 100 NAIJA STREET & ROAST ARRAY ---
@@ -106,7 +115,10 @@ export default function Home() {
   const [savedPin, setSavedPin] = useState(""); 
   const [tempPin, setTempPin] = useState("");
   
-  // --- WITHDRAWAL STATE ---
+  // --- WALLET & WITHDRAWAL STATE ---
+  const [walletTab, setWalletTab] = useState<'deposit' | 'withdraw'>('deposit');
+  const [fundAmount, setFundAmount] = useState("");
+
   const [withdrawType, setWithdrawType] = useState<'bank' | 'airtime'>('bank');
   const [withdrawBank, setWithdrawBank] = useState("");
   const [withdrawAccount, setWithdrawAccount] = useState("");
@@ -116,27 +128,59 @@ export default function Home() {
   const [airtimeNetwork, setAirtimeNetwork] = useState("MTN");
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
-  // --- MODAL STATE (Defaults to login wall if no session exists) ---
-  const [modal, setModal] = useState({ 
-    isOpen: false, 
-    type: 'none', 
-    payload: [] as any[]
-  });
+  // --- MODAL STATE ---
+  const [modal, setModal] = useState({ isOpen: false, type: 'none', payload: [] as any[] });
   const [tempAuthInput, setTempAuthInput] = useState("");
   const [tempPassInput, setTempPassInput] = useState("");
+
+  // --- PAYSTACK INTEGRATION CONFIGURATION ---
+  const paystackConfig = {
+    reference: new Date().getTime().toString() + "-" + Math.floor(Math.random() * 1000),
+    email: userIdentifier.includes('@') ? userIdentifier : `${userIdentifier || 'guest'}@thepixelvest.com`,
+    amount: (parseInt(fundAmount) || 0) * 100, // Paystack counts in Kobo (₦1 = 100 kobo)
+    publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "",
+  };
+
+  const initializePayment = usePaystackPayment(paystackConfig);
+
+  const handlePaystackSuccess = async (reference: any) => {
+    setIsProcessing(true);
+    try {
+      const addedAmount = parseInt(fundAmount);
+      const newBalance = walletBalance + addedAmount;
+      
+      // Update Supabase Wallet
+      const { error } = await supabase.from('users').update({ wallet_balance: newBalance }).eq('phone', userIdentifier);
+      if (error) throw error;
+      
+      setWalletBalance(newBalance);
+      setFundAmount("");
+      alert(`Payment Successful! ₦${addedAmount.toLocaleString()} added to your vault.`);
+    } catch (err: any) {
+      alert("Database error updating wallet: " + err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePaystackClose = () => {
+    console.log("Paystack popup closed.");
+  };
+
+  const triggerFunding = () => {
+    if (!fundAmount || parseInt(fundAmount) < 100) return alert("Minimum deposit is ₦100.");
+    initializePayment({ onSuccess: handlePaystackSuccess, onClose: handlePaystackClose });
+  };
 
   // --- LOGIC: BOOT CHECK & GLOBAL DATA FETCH ---
   useEffect(() => {
     const initApp = async () => {
-      // 1. Fetch global sold nodes from Supabase
       const { data } = await supabase.from('secured_nodes').select('node_id');
       if (data) setSoldSessionNodes(data.map(n => n.node_id));
 
-      // 2. Check local storage for existing session
       const savedUser = localStorage.getItem('pixel_vest_user');
       if (savedUser) {
         setUserIdentifier(savedUser);
-        // Fetch fresh user data from database
         const { data: userData } = await supabase.from('users').select('*').eq('phone', savedUser).single();
         if (userData) {
           setWalletBalance(userData.wallet_balance || 0);
@@ -146,7 +190,7 @@ export default function Home() {
           }
         }
       } else {
-        // No session found -> Open Login Portal immediately on boot
+        // Open Login Portal immediately on boot for new users
         setModal({ isOpen: true, type: 'login', payload: [] });
       }
     };
@@ -158,10 +202,7 @@ export default function Home() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     setIsIOS(!!window.navigator.userAgent.match(/iPad/i) || !!window.navigator.userAgent.match(/iPhone/i));
 
-    return () => { 
-      clearInterval(interval); 
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt); 
-    };
+    return () => { clearInterval(interval); window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt); };
   }, []);
 
   const handleAppInstall = async () => {
@@ -240,12 +281,8 @@ export default function Home() {
 
       setUserIdentifier(user.phone);
       setWalletBalance(user.wallet_balance || 0);
-      if (user.pin) { 
-        setHasPin(true); 
-        setSavedPin(user.pin); 
-      }
+      if (user.pin) { setHasPin(true); setSavedPin(user.pin); }
       
-      // Save session locally so user is remembered next time they open the app
       localStorage.setItem('pixel_vest_user', user.phone);
       setModal({ isOpen: false, type: 'none', payload: [] });
     } catch (err: any) {
@@ -258,13 +295,8 @@ export default function Home() {
   // --- LOGIC: CHECKOUT & SAVE TO DB ---
   const triggerCheckout = (useWallet: boolean) => {
     if (selectedNodes.length === 0) return;
-    if (!userIdentifier) { 
-      setModal({ isOpen: true, type: 'login', payload: [] }); 
-      return; 
-    }
-    if (useWallet && walletBalance < cartCost) {
-      return alert("Insufficient Wallet Balance!");
-    }
+    if (!userIdentifier) { setModal({ isOpen: true, type: 'login', payload: [] }); return; }
+    if (useWallet && walletBalance < cartCost) return alert("Insufficient Wallet Balance!");
     
     processCheckout(userIdentifier, walletBalance, useWallet);
   };
@@ -276,12 +308,7 @@ export default function Home() {
     try {
       const results = selectedNodes.map(nodeId => {
         const outcome = determineNodeOutcome(nodeId);
-        return { 
-          node_id: nodeId, 
-          phone: phone, 
-          outcome_type: outcome.type, 
-          amount_won: outcome.value 
-        };
+        return { node_id: nodeId, phone: phone, outcome_type: outcome.type, amount_won: outcome.value };
       });
 
       const { error: nodeError } = await supabase.from('secured_nodes').insert(results);
@@ -296,11 +323,7 @@ export default function Home() {
       setSoldSessionNodes(prev => [...prev, ...selectedNodes]);
       setWalletBalance(newBalance);
       
-      const revealPayload = results.map(r => ({ 
-        id: r.node_id, 
-        type: r.outcome_type, 
-        result: r.amount_won > 0 ? `₦${r.amount_won.toLocaleString()}` : ROASTS[r.node_id % ROASTS.length] 
-      }));
+      const revealPayload = results.map(r => ({ id: r.node_id, type: r.outcome_type, result: r.amount_won > 0 ? `₦${r.amount_won.toLocaleString()}` : ROASTS[r.node_id % ROASTS.length] }));
       setModal({ isOpen: true, type: 'reveal', payload: revealPayload });
       setSelectedNodes([]); 
     } catch (error: any) {
@@ -338,11 +361,7 @@ export default function Home() {
       : { user_phone: userIdentifier, bank_name: airtimeNetwork, account_number: airtimePhone, account_name: "AIRTIME VTU", amount: amt, type: 'airtime' };
 
     const { error } = await supabase.from('withdrawals').insert(payload);
-    if (error) { 
-      alert("Error: " + error.message); 
-      setIsWithdrawing(false); 
-      return; 
-    }
+    if (error) { alert("Error: " + error.message); setIsWithdrawing(false); return; }
 
     const newBalance = walletBalance - amt;
     await supabase.from('users').update({ wallet_balance: newBalance }).eq('phone', userIdentifier);
@@ -359,9 +378,7 @@ export default function Home() {
   };
 
   const toggleNode = (nodeId: number) => {
-    if (soldSessionNodes.includes(nodeId)) {
-      return alert(`Node ${nodeId} is already secured.`);
-    }
+    if (soldSessionNodes.includes(nodeId)) return alert(`Node ${nodeId} is already secured.`);
     setSelectedNodes(prev => prev.includes(nodeId) ? prev.filter(id => id !== nodeId) : [...prev, nodeId]);
   };
 
@@ -385,17 +402,15 @@ export default function Home() {
         type="button" 
         onClick={() => toggleNode(nodeId)}
         style={{ 
-          width: '100%', aspectRatio: '1/1', background: bgStyle, color: textColor,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'clamp(11px, 3.5vw, 14px)', fontWeight: '900', borderRadius: '12px', 
-          cursor: sold ? 'not-allowed' : 'pointer', border: `2px solid ${borderColor}`, transform: isSelected ? 'scale(0.92)' : 'scale(1)', transition: 'all 0.2s ease',
-          boxShadow: shadow, WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation', position: 'relative', overflow: 'hidden', padding: sponsor?.url ? '6px' : '0', boxSizing: 'border-box'
+          width: '100%', aspectRatio: '1/1', background: bgStyle, color: textColor, display: 'flex', alignItems: 'center', justifyContent: 'center', 
+          fontSize: 'clamp(11px, 3.5vw, 14px)', fontWeight: '900', borderRadius: '12px', cursor: sold ? 'not-allowed' : 'pointer', border: `2px solid ${borderColor}`, 
+          transform: isSelected ? 'scale(0.92)' : 'scale(1)', transition: 'all 0.2s ease', boxShadow: shadow, WebkitTapHighlightColor: 'transparent', 
+          touchAction: 'manipulation', position: 'relative', overflow: 'hidden', padding: sponsor?.url ? '6px' : '0', boxSizing: 'border-box'
         }}
       >
         {sponsor?.url ? (
           <img src={sponsor.url} alt={`Sponsor ${nodeId}`} style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: sold ? 0.9 : 1 }} />
-        ) : (
-          nodeId 
-        )}
+        ) : ( nodeId )}
       </button>
     );
   }
@@ -407,7 +422,7 @@ export default function Home() {
       <div style={{ position: 'sticky', top: 0, zIndex: 40, backgroundColor: 'rgba(3, 7, 18, 0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '16px', paddingTop: 'max(16px, env(safe-area-inset-top))', boxSizing: 'border-box', width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <h1 style={{ fontSize: '1.3rem', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '1px', margin: 0 }}>The Pixel Vest</h1>
-          <button onClick={() => setModal({ isOpen: true, type: 'withdraw', payload: [] })} style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#10B981', padding: '8px 14px', borderRadius: '20px', fontWeight: 'bold', fontSize: '0.9rem', cursor: 'pointer' }}>
+          <button onClick={() => setModal({ isOpen: true, type: 'wallet', payload: [] })} style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.4)', color: '#10B981', padding: '8px 14px', borderRadius: '20px', fontWeight: 'bold', fontSize: '0.9rem', cursor: 'pointer' }}>
             ₦{walletBalance.toLocaleString()}
           </button>
         </div>
@@ -519,7 +534,7 @@ export default function Home() {
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(20px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box' }}>
           <div style={{ backgroundColor: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', width: '100%', maxWidth: '400px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)' }}>
             
-            {/* LOGIN PORTAL (SHOWN ON BOOT IF NEW USER) */}
+            {/* LOGIN PORTAL */}
             {modal.type === 'login' && (
               <div style={{ padding: '36px 24px', textAlign: 'center' }}>
                 <div style={{ display: 'inline-block', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '6px 16px', borderRadius: '20px', marginBottom: '16px' }}>
@@ -533,6 +548,9 @@ export default function Home() {
                 <input type="password" placeholder="Password (Optional)" value={tempPassInput} onChange={(e) => setTempPassInput(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', marginBottom: '24px', fontSize: '16px', boxSizing: 'border-box' }} />
                 <button onClick={handleAuth} disabled={isProcessing} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', fontSize: '1rem', border: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>
                   {isProcessing ? "OPENING VAULT..." : "ENTER APP"}
+                </button>
+                <button onClick={() => setModal({ isOpen: false, type: 'none', payload: [] })} style={{ width: '100%', backgroundColor: 'transparent', color: '#9CA3AF', padding: '16px', marginTop: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>
+                  Browse as Guest
                 </button>
               </div>
             )}
@@ -581,8 +599,8 @@ export default function Home() {
               </>
             )}
 
-            {/* WITHDRAW / WALLET MODAL */}
-            {modal.type === 'withdraw' && (
+            {/* WALLET / DEPOSIT / WITHDRAW MODAL */}
+            {modal.type === 'wallet' && (
               <div style={{ padding: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                   <h2 style={{ margin: 0, color: '#fff', fontSize: '1.3rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -596,41 +614,59 @@ export default function Home() {
                   <p style={{ color: '#64748B', fontSize: '0.85rem', margin: '8px 0 0 0' }}>{userIdentifier || "Guest Account"}</p>
                 </div>
                 
+                {/* WALLET TABS */}
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-                  <button onClick={() => setWithdrawType('bank')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', fontWeight: 'bold', backgroundColor: withdrawType === 'bank' ? 'rgba(255,255,255,0.1)' : 'transparent', color: withdrawType === 'bank' ? '#fff' : '#64748B', cursor: 'pointer' }}>Bank</button>
-                  <button onClick={() => setWithdrawType('airtime')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', fontWeight: 'bold', backgroundColor: withdrawType === 'airtime' ? 'rgba(255,255,255,0.1)' : 'transparent', color: withdrawType === 'airtime' ? '#fff' : '#64748B', cursor: 'pointer' }}>Airtime</button>
+                  <button onClick={() => setWalletTab('deposit')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', fontWeight: 'bold', backgroundColor: walletTab === 'deposit' ? 'rgba(255,255,255,0.1)' : 'transparent', color: walletTab === 'deposit' ? '#fff' : '#64748B', cursor: 'pointer' }}>Deposit</button>
+                  <button onClick={() => setWalletTab('withdraw')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', fontWeight: 'bold', backgroundColor: walletTab === 'withdraw' ? 'rgba(255,255,255,0.1)' : 'transparent', color: walletTab === 'withdraw' ? '#fff' : '#64748B', cursor: 'pointer' }}>Withdraw</button>
                 </div>
                 
-                {withdrawType === 'bank' ? (
-                  walletBalance >= 200 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
-                      <input type="text" placeholder="Bank Name (e.g. OPay)" value={withdrawBank} onChange={(e) => setWithdrawBank(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }} />
-                      <input type="text" placeholder="10-Digit Account Number" value={withdrawAccount} onChange={(e) => setWithdrawAccount(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }} />
-                      <input type="text" placeholder="Account Name" value={withdrawName} onChange={(e) => setWithdrawName(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }} />
-                      <input type="number" placeholder={`Amount (Max: ₦${walletBalance})`} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }} />
-                      <button onClick={() => !hasPin ? setModal({ isOpen: true, type: 'pin-setup', payload: [] }) : setModal({ isOpen: true, type: 'pin-confirm', payload: [] })} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', border: 'none', cursor: 'pointer' }}>
-                        TRANSFER FUNDS
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={{ backgroundColor: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: '16px', padding: '24px', textAlign: 'center', marginBottom: '32px' }}>
-                      <p style={{ color: '#FCD34D', fontSize: '0.9rem', margin: '0' }}>Bank transfers require a minimum of ₦200. Switch to the <strong>Airtime</strong> tab to withdraw micro-balances instantly.</p>
-                    </div>
-                  )
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
-                    <select value={airtimeNetwork} onChange={(e) => setAirtimeNetwork(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }}>
-                      <option value="MTN">MTN NG</option>
-                      <option value="AIRTEL">AIRTEL NG</option>
-                      <option value="GLO">GLO NG</option>
-                      <option value="9MOBILE">9MOBILE NG</option>
-                    </select>
-                    <input type="tel" placeholder="Destination Phone" value={airtimePhone} onChange={(e) => setAirtimePhone(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }} />
-                    <input type="number" placeholder={`Amount (Max: ₦${walletBalance})`} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }} />
-                    <button onClick={() => !hasPin ? setModal({ isOpen: true, type: 'pin-setup', payload: [] }) : setModal({ isOpen: true, type: 'pin-confirm', payload: [] })} disabled={walletBalance === 0} style={{ width: '100%', backgroundColor: '#F59E0B', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', border: 'none', cursor: walletBalance === 0 ? 'not-allowed' : 'pointer', opacity: walletBalance === 0 ? 0.5 : 1 }}>
-                      SEND AIRTIME
+                {walletTab === 'deposit' ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
+                    <p style={{ color: '#9CA3AF', fontSize: '0.85rem', margin: '0 0 8px 0' }}>Instantly fund your wallet to secure nodes faster.</p>
+                    <input type="number" placeholder="Amount (₦)" value={fundAmount} onChange={(e) => setFundAmount(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }} />
+                    <button onClick={triggerFunding} disabled={isProcessing} style={{ width: '100%', backgroundColor: '#F59E0B', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', border: 'none', cursor: 'pointer', marginTop: '8px' }}>
+                      {isProcessing ? "PROCESSING..." : "FUND WITH PAYSTACK"}
                     </button>
                   </div>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+                      <button onClick={() => setWithdrawType('bank')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', fontWeight: 'bold', backgroundColor: withdrawType === 'bank' ? 'rgba(16,185,129,0.1)' : 'transparent', color: withdrawType === 'bank' ? '#10B981' : '#64748B', cursor: 'pointer' }}>Bank Transfer</button>
+                      <button onClick={() => setWithdrawType('airtime')} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', fontWeight: 'bold', backgroundColor: withdrawType === 'airtime' ? 'rgba(16,185,129,0.1)' : 'transparent', color: withdrawType === 'airtime' ? '#10B981' : '#64748B', cursor: 'pointer' }}>Airtime VTU</button>
+                    </div>
+                    
+                    {withdrawType === 'bank' ? (
+                      walletBalance >= 200 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
+                          <input type="text" placeholder="Bank Name (e.g. OPay)" value={withdrawBank} onChange={(e) => setWithdrawBank(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }} />
+                          <input type="text" placeholder="10-Digit Account Number" value={withdrawAccount} onChange={(e) => setWithdrawAccount(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }} />
+                          <input type="text" placeholder="Account Name" value={withdrawName} onChange={(e) => setWithdrawName(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }} />
+                          <input type="number" placeholder={`Amount (Max: ₦${walletBalance})`} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }} />
+                          <button onClick={() => !hasPin ? setModal({ isOpen: true, type: 'pin-setup', payload: [] }) : setModal({ isOpen: true, type: 'pin-confirm', payload: [] })} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', border: 'none', cursor: 'pointer', marginTop: '8px' }}>
+                            TRANSFER FUNDS
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ backgroundColor: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: '16px', padding: '24px', textAlign: 'center', marginBottom: '32px' }}>
+                          <p style={{ color: '#FCD34D', fontSize: '0.9rem', margin: '0' }}>Bank transfers require a minimum of ₦200. Switch to the <strong>Airtime</strong> tab to withdraw micro-balances instantly.</p>
+                        </div>
+                      )
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
+                        <select value={airtimeNetwork} onChange={(e) => setAirtimeNetwork(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', fontSize: '16px' }}>
+                          <option value="MTN">MTN NG</option>
+                          <option value="AIRTEL">AIRTEL NG</option>
+                          <option value="GLO">GLO NG</option>
+                          <option value="9MOBILE">9MOBILE NG</option>
+                        </select>
+                        <input type="tel" placeholder="Destination Phone" value={airtimePhone} onChange={(e) => setAirtimePhone(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }} />
+                        <input type="number" placeholder={`Amount (Max: ₦${walletBalance})`} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }} />
+                        <button onClick={() => !hasPin ? setModal({ isOpen: true, type: 'pin-setup', payload: [] }) : setModal({ isOpen: true, type: 'pin-confirm', payload: [] })} disabled={walletBalance === 0} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', border: 'none', cursor: walletBalance === 0 ? 'not-allowed' : 'pointer', opacity: walletBalance === 0 ? 0.5 : 1, marginTop: '8px' }}>
+                          SEND AIRTIME
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -646,7 +682,7 @@ export default function Home() {
                 <button onClick={handlePinSetup} disabled={isProcessing} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', border: 'none', cursor: 'pointer' }}>
                   {isProcessing ? "SAVING..." : "SAVE & CONTINUE"}
                 </button>
-                <button onClick={() => { setTempPin(""); setModal({ isOpen: true, type: 'withdraw', payload: [] }); }} style={{ width: '100%', backgroundColor: 'transparent', color: '#9CA3AF', padding: '16px', marginTop: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>
+                <button onClick={() => { setTempPin(""); setModal({ isOpen: true, type: 'wallet', payload: [] }); }} style={{ width: '100%', backgroundColor: 'transparent', color: '#9CA3AF', padding: '16px', marginTop: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>
                   Cancel
                 </button>
               </div>
@@ -663,7 +699,7 @@ export default function Home() {
                 <button onClick={() => { if(tempPin === savedPin) { setTempPin(""); executeWithdrawal(); } else alert("Incorrect PIN."); }} disabled={isWithdrawing} style={{ width: '100%', backgroundColor: '#F59E0B', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', border: 'none', cursor: 'pointer' }}>
                   {isWithdrawing ? "AUTHORIZING..." : "CONFIRM"}
                 </button>
-                <button onClick={() => { setTempPin(""); setModal({ isOpen: true, type: 'withdraw', payload: [] }); }} disabled={isWithdrawing} style={{ width: '100%', backgroundColor: 'transparent', color: '#9CA3AF', padding: '16px', marginTop: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>
+                <button onClick={() => { setTempPin(""); setModal({ isOpen: true, type: 'wallet', payload: [] }); }} disabled={isWithdrawing} style={{ width: '100%', backgroundColor: 'transparent', color: '#9CA3AF', padding: '16px', marginTop: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>
                   Cancel
                 </button>
               </div>
