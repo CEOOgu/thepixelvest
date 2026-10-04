@@ -89,7 +89,6 @@ const ROASTS = [
 ];
 
 export default function Home() {
-  // --- CORE GAME STATE ---
   const [selectedNodes, setSelectedNodes] = useState<number[]>([]);
   const [soldSessionNodes, setSoldSessionNodes] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -97,15 +96,12 @@ export default function Home() {
   const [currentSectorStart, setCurrentSectorStart] = useState(1);
   const [currentWinIdx, setCurrentWinIdx] = useState(0);
   
-  // --- APP INSTALL (PWA) STATE ---
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
 
-  // --- AUTH & WALLET STATE ---
+  // --- AUTH & SESSION STATE ---
   const [userIdentifier, setUserIdentifier] = useState(""); 
   const [walletBalance, setWalletBalance] = useState(0);
-  
-  // --- SECURITY PIN STATE ---
   const [hasPin, setHasPin] = useState(false); 
   const [savedPin, setSavedPin] = useState(""); 
   const [tempPin, setTempPin] = useState("");
@@ -120,7 +116,7 @@ export default function Home() {
   const [airtimeNetwork, setAirtimeNetwork] = useState("MTN");
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
-  // --- MODAL STATE ---
+  // --- MODAL STATE (Defaults to login wall if no session exists) ---
   const [modal, setModal] = useState({ 
     isOpen: false, 
     type: 'none', 
@@ -129,20 +125,36 @@ export default function Home() {
   const [tempAuthInput, setTempAuthInput] = useState("");
   const [tempPassInput, setTempPassInput] = useState("");
 
-  // --- LOGIC: FETCH GLOBAL DB DATA ON LOAD ---
+  // --- LOGIC: BOOT CHECK & GLOBAL DATA FETCH ---
   useEffect(() => {
-    const fetchGlobalNodes = async () => {
-      const { data, error } = await supabase.from('secured_nodes').select('node_id');
+    const initApp = async () => {
+      // 1. Fetch global sold nodes from Supabase
+      const { data } = await supabase.from('secured_nodes').select('node_id');
       if (data) setSoldSessionNodes(data.map(n => n.node_id));
+
+      // 2. Check local storage for existing session
+      const savedUser = localStorage.getItem('pixel_vest_user');
+      if (savedUser) {
+        setUserIdentifier(savedUser);
+        // Fetch fresh user data from database
+        const { data: userData } = await supabase.from('users').select('*').eq('phone', savedUser).single();
+        if (userData) {
+          setWalletBalance(userData.wallet_balance || 0);
+          if (userData.pin) {
+            setHasPin(true);
+            setSavedPin(userData.pin);
+          }
+        }
+      } else {
+        // No session found -> Open Login Portal immediately on boot
+        setModal({ isOpen: true, type: 'login', payload: [] });
+      }
     };
-    fetchGlobalNodes();
+
+    initApp();
 
     const interval = setInterval(() => setCurrentWinIdx((prev) => (prev + 1) % RECENT_WINS.length), 4000);
-    
-    const handleBeforeInstallPrompt = (e: any) => { 
-      e.preventDefault(); 
-      setDeferredPrompt(e); 
-    };
+    const handleBeforeInstallPrompt = (e: any) => { e.preventDefault(); setDeferredPrompt(e); };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     setIsIOS(!!window.navigator.userAgent.match(/iPad/i) || !!window.navigator.userAgent.match(/iPhone/i));
 
@@ -182,23 +194,18 @@ export default function Home() {
 
   // --- LOGIC: DETERMINISTIC / STATIC PRIZE DISTRIBUTION ---
   const determineNodeOutcome = (nodeId: number) => {
-    // 1. PROMOTIONAL OVERRIDE: Exactly 90 wins distributed statically inside the first 200 nodes
     if (nodeId <= 200) {
-      // Multiply by a prime (73) and mod 200 to scatter the 90 winners perfectly randomly but permanently
       const bonusHash = (nodeId * 73) % 200; 
       if (bonusHash < 90) {
-        // Assign a random-looking but static amount between 200 and 500
         const amounts = [200, 250, 300, 350, 400, 450, 500];
         const winAmt = amounts[nodeId % amounts.length];
         return { type: 'win', result: `₦${winAmt.toLocaleString()}`, value: winAmt };
       }
     }
 
-    // 2. STANDARD GLOBAL DISTRIBUTION (Locked for nodes 1 - 1,000,000)
     let hash = (nodeId * 2654435761) % 4294967296;
     let r = hash / 4294967296; 
     
-    // Original 14 Exact Win Tiers restored fully
     if (r < 0.0002) return { type: 'win', result: '₦10,000', value: 10000 };
     if (r < 0.00035) return { type: 'win', result: '₦5,000', value: 5000 };
     if (r < 0.00065) return { type: 'win', result: '₦2,500', value: 2500 };
@@ -214,12 +221,11 @@ export default function Home() {
     if (r < 0.18365) return { type: 'win', result: '₦20', value: 20 };
     if (r < 0.19865) return { type: 'win', result: '₦10', value: 10 };
     
-    // Losses map to the full 100-item roast array
     const roastIndex = nodeId % ROASTS.length;
     return { type: 'loss', result: ROASTS[roastIndex], value: 0 };
   };
 
-  // --- LOGIC: AUTHENTICATE VIA SUPABASE ---
+  // --- LOGIC: AUTHENTICATE & PERSIST SESSION ---
   const handleAuth = async () => {
     if (tempAuthInput.length < 5) return alert("Please enter a valid Phone or Email.");
     setIsProcessing(true);
@@ -233,13 +239,15 @@ export default function Home() {
       }
 
       setUserIdentifier(user.phone);
-      setWalletBalance(user.wallet_balance);
+      setWalletBalance(user.wallet_balance || 0);
       if (user.pin) { 
         setHasPin(true); 
         setSavedPin(user.pin); 
       }
       
-      triggerCheckout(false, user.phone, user.wallet_balance);
+      // Save session locally so user is remembered next time they open the app
+      localStorage.setItem('pixel_vest_user', user.phone);
+      setModal({ isOpen: false, type: 'none', payload: [] });
     } catch (err: any) {
       alert("Auth Error: " + err.message);
     } finally {
@@ -248,17 +256,17 @@ export default function Home() {
   };
 
   // --- LOGIC: CHECKOUT & SAVE TO DB ---
-  const triggerCheckout = (useWallet: boolean, phone = userIdentifier, currentBal = walletBalance) => {
+  const triggerCheckout = (useWallet: boolean) => {
     if (selectedNodes.length === 0) return;
-    if (!phone) { 
+    if (!userIdentifier) { 
       setModal({ isOpen: true, type: 'login', payload: [] }); 
       return; 
     }
-    if (useWallet && currentBal < cartCost) {
+    if (useWallet && walletBalance < cartCost) {
       return alert("Insufficient Wallet Balance!");
     }
     
-    processCheckout(phone, currentBal, useWallet);
+    processCheckout(userIdentifier, walletBalance, useWallet);
   };
 
   const processCheckout = async (phone: string, currentBalance: number, useWallet: boolean) => {
@@ -305,7 +313,7 @@ export default function Home() {
     }
   };
 
-  // --- LOGIC: WITHDRAWALS & DB DB ---
+  // --- LOGIC: WITHDRAWALS & PIN SETUP ---
   const handlePinSetup = async () => {
     if(tempPin.length === 4) { 
       setIsProcessing(true);
@@ -350,7 +358,6 @@ export default function Home() {
     setIsWithdrawing(false);
   };
 
-  // --- GRID RENDER ENGINE ---
   const toggleNode = (nodeId: number) => {
     if (soldSessionNodes.includes(nodeId)) {
       return alert(`Node ${nodeId} is already secured.`);
@@ -378,27 +385,10 @@ export default function Home() {
         type="button" 
         onClick={() => toggleNode(nodeId)}
         style={{ 
-          width: '100%', 
-          aspectRatio: '1/1', 
-          background: bgStyle, 
-          color: textColor,
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          fontSize: 'clamp(11px, 3.5vw, 14px)', 
-          fontWeight: '900', 
-          borderRadius: '12px', 
-          cursor: sold ? 'not-allowed' : 'pointer', 
-          border: `2px solid ${borderColor}`, 
-          transform: isSelected ? 'scale(0.92)' : 'scale(1)', 
-          transition: 'all 0.2s ease',
-          boxShadow: shadow, 
-          WebkitTapHighlightColor: 'transparent', 
-          touchAction: 'manipulation', 
-          position: 'relative', 
-          overflow: 'hidden', 
-          padding: sponsor?.url ? '6px' : '0', 
-          boxSizing: 'border-box'
+          width: '100%', aspectRatio: '1/1', background: bgStyle, color: textColor,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 'clamp(11px, 3.5vw, 14px)', fontWeight: '900', borderRadius: '12px', 
+          cursor: sold ? 'not-allowed' : 'pointer', border: `2px solid ${borderColor}`, transform: isSelected ? 'scale(0.92)' : 'scale(1)', transition: 'all 0.2s ease',
+          boxShadow: shadow, WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation', position: 'relative', overflow: 'hidden', padding: sponsor?.url ? '6px' : '0', boxSizing: 'border-box'
         }}
       >
         {sponsor?.url ? (
@@ -410,7 +400,6 @@ export default function Home() {
     );
   }
 
-  // --- FULL LAYOUT RENDER ---
   return (
     <main style={{ backgroundColor: '#030712', minHeight: '100vh', width: '100%', maxWidth: '480px', margin: '0 auto', color: '#ffffff', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '120px', position: 'relative', overflowX: 'hidden', boxSizing: 'border-box' }}>
       
@@ -456,14 +445,13 @@ export default function Home() {
         <p style={{ color: '#10B981', fontSize: '0.85rem', fontWeight: 'bold' }}>⚡ Bulk Buy: 10+ (10% Off) | 20+ (20% Off)</p>
       </div>
 
-      {/* ADVERTISEMENT PLACEHOLDER (ABOVE GRID) */}
       <div style={{ padding: '0 16px 16px 16px', boxSizing: 'border-box', width: '100%', display: 'flex', justifyContent: 'center' }}>
         <div style={{ width: '100%', maxWidth: '320px', height: '50px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px dashed rgba(255,255,255,0.15)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4B5563', fontSize: '0.7rem', fontWeight: 'bold', letterSpacing: '1px' }}>
           SPONSORED AD SPACE
         </div>
       </div>
 
-      {/* RESPONSIVE CSS GRID */}
+      {/* GRID CONTAINER */}
       <div style={{ padding: '0 16px 16px 16px', boxSizing: 'border-box', width: '100%' }}>
         {currentSectorStart > 1 && (
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
@@ -528,9 +516,27 @@ export default function Home() {
 
       {/* GLOBAL MODALS */}
       {modal.isOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(16px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(20px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box' }}>
           <div style={{ backgroundColor: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', width: '100%', maxWidth: '400px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)' }}>
             
+            {/* LOGIN PORTAL (SHOWN ON BOOT IF NEW USER) */}
+            {modal.type === 'login' && (
+              <div style={{ padding: '36px 24px', textAlign: 'center' }}>
+                <div style={{ display: 'inline-block', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '6px 16px', borderRadius: '20px', marginBottom: '16px' }}>
+                  <p style={{ color: '#10B981', fontSize: '0.75rem', fontWeight: '900', letterSpacing: '1px', margin: 0, textTransform: 'uppercase' }}>Secure Gateway</p>
+                </div>
+                <h2 style={{ margin: '0 0 8px 0', fontSize: '1.6rem', fontWeight: '900' }}>Welcome to The Pixel Vest</h2>
+                <p style={{ color: '#9CA3AF', fontSize: '0.9rem', marginBottom: '28px', lineHeight: '1.5' }}>
+                  Enter your phone number or email to access your wallet or create an instant account.
+                </p>
+                <input type="text" placeholder="Phone Number or Email" value={tempAuthInput} onChange={(e) => setTempAuthInput(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', marginBottom: '12px', fontSize: '16px', boxSizing: 'border-box' }} />
+                <input type="password" placeholder="Password (Optional)" value={tempPassInput} onChange={(e) => setTempPassInput(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', marginBottom: '24px', fontSize: '16px', boxSizing: 'border-box' }} />
+                <button onClick={handleAuth} disabled={isProcessing} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', fontSize: '1rem', border: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>
+                  {isProcessing ? "OPENING VAULT..." : "ENTER APP"}
+                </button>
+              </div>
+            )}
+
             {/* INSTALL MODAL */}
             {modal.type === 'install-help' && (
               <div style={{ padding: '32px 24px', textAlign: 'center' }}>
@@ -546,24 +552,6 @@ export default function Home() {
                 )}
                 <button onClick={() => setModal({ isOpen: false, type: 'none', payload: [] })} style={{ width: '100%', backgroundColor: '#2563EB', color: '#fff', padding: '16px', borderRadius: '16px', fontWeight: '900', border: 'none', cursor: 'pointer' }}>
                   GOT IT
-                </button>
-              </div>
-            )}
-
-            {/* LOGIN MODAL */}
-            {modal.type === 'login' && (
-              <div style={{ padding: '32px 24px', textAlign: 'center' }}>
-                <h2 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', fontWeight: '900' }}>Authentication</h2>
-                <p style={{ color: '#9CA3AF', fontSize: '0.9rem', marginBottom: '24px', lineHeight: '1.5' }}>
-                  Enter your Phone or Email to sync your wallet with the vault.
-                </p>
-                <input type="text" placeholder="Email or Phone Number" value={tempAuthInput} onChange={(e) => setTempAuthInput(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', marginBottom: '12px', fontSize: '16px', boxSizing: 'border-box' }} />
-                <input type="password" placeholder="Password (Optional)" value={tempPassInput} onChange={(e) => setTempPassInput(e.target.value)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none', marginBottom: '24px', fontSize: '16px', boxSizing: 'border-box' }} />
-                <button onClick={handleAuth} disabled={isProcessing} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '18px', borderRadius: '16px', fontWeight: '900', fontSize: '1rem', border: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>
-                  {isProcessing ? "SYNCING..." : "SECURE ACCOUNT"}
-                </button>
-                <button onClick={() => setModal({ isOpen: false, type: 'none', payload: [] })} style={{ width: '100%', backgroundColor: 'transparent', color: '#9CA3AF', padding: '16px', marginTop: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer', boxSizing: 'border-box' }}>
-                  Cancel
                 </button>
               </div>
             )}
@@ -613,14 +601,7 @@ export default function Home() {
                   <button onClick={() => setWithdrawType('airtime')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', fontWeight: 'bold', backgroundColor: withdrawType === 'airtime' ? 'rgba(255,255,255,0.1)' : 'transparent', color: withdrawType === 'airtime' ? '#fff' : '#64748B', cursor: 'pointer' }}>Airtime</button>
                 </div>
                 
-                {!userIdentifier ? (
-                  <div style={{ textAlign: 'center' }}>
-                    <p style={{ color: '#FCD34D', fontSize: '0.9rem', marginBottom: '16px' }}>Secure your account to withdraw.</p>
-                    <button onClick={() => setModal({ isOpen: true, type: 'login', payload: [] })} style={{ width: '100%', backgroundColor: '#10B981', color: '#000', padding: '16px', borderRadius: '16px', fontWeight: 'bold', border: 'none' }}>
-                      LOGIN / SIGN UP
-                    </button>
-                  </div>
-                ) : withdrawType === 'bank' ? (
+                {withdrawType === 'bank' ? (
                   walletBalance >= 200 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '32px' }}>
                       <input type="text" placeholder="Bank Name (e.g. OPay)" value={withdrawBank} onChange={(e) => setWithdrawBank(e.target.value)} style={{ padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', outline: 'none' }} />
