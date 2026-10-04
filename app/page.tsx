@@ -7,7 +7,7 @@ import { supabase } from "./lib/supabase";
 const NODES_PER_PAGE = 100;
 const TOTAL_NODES = 1000000;
 
-// The B2B Ad Framework: Map node IDs to image URLs with a highlight flag
+// The B2B Ad Framework: Map node IDs to image URLs with an optional white highlight
 const SPONSORED_NODES: Record<number, { url: string; highlight?: string }> = {
   15: { 
     url: "https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg", 
@@ -17,6 +17,7 @@ const SPONSORED_NODES: Record<number, { url: string; highlight?: string }> = {
     url: "https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg" 
   },
 };
+
 // --- NAIJA STREET & ROAST ARRAY (100 ITEMS) ---
 const ROASTS = [
   // The Street & Sapa Roasts
@@ -154,40 +155,32 @@ export default function Home() {
     }
   };
 
-  // --- LOGIC: EXACT PROBABILITY ENGINE (₦15.5M Pool) ---
-  const determineNodeOutcome = () => {
-    const r = Math.random();
-    // 100 / 1,000,000 = 0.0001
-    if (r < 0.00010) return { type: 'win', result: '₦10,000', value: 10000 };
-    // 80 / 1,000,000 = 0.00008 (Cumulative: 0.00018)
-    if (r < 0.00018) return { type: 'win', result: '₦5,000', value: 8000 };
-    // 500 / 1,000,000 = 0.0005 (Cumulative: 0.00068)
-    if (r < 0.00068) return { type: 'win', result: '₦3,000', value: 5000 };
-    // 2500 / 1,000,000 = 0.0025 (Cumulative: 0.00318)
-    if (r < 0.00318) return { type: 'win', result: '₦1,000', value: 6000 };
-    // 30,000 / 1,000,000 = 0.03 (Cumulative: 0.03318)
-    if (r < 0.03318) return { type: 'win', result: '₦100', value: 100 };
-    // 15,000 / 1,000,000 = 0.015 (Cumulative: 0.04818)
-    if (r < 0.04818) return { type: 'win', result: '₦70', value: 70 };
-    // 45,000 / 1,000,000 = 0.045 (Cumulative: 0.09318)
-    if (r < 0.09318) return { type: 'win', result: '₦60', value: 60 };
-    // 45,000 / 1,000,000 = 0.045 (Cumulative: 0.13818)
-    if (r < 0.13818) return { type: 'win', result: '₦50', value: 50 };
-    // 20,000 / 1,000,000 = 0.02 (Cumulative: 0.15818)
-    if (r < 0.15818) return { type: 'win', result: '₦30', value: 30 };
-    // 5,000 / 1,000,000 = 0.005 (Cumulative: 0.16318)
-    if (r < 0.16318) return { type: 'win', result: '₦25', value: 25 };
-    // 15,000 / 1,000,000 = 0.015 (Cumulative: 0.17818)
-    if (r < 0.17818) return { type: 'win', result: '₦20', value: 20 };
-    // 15,000 / 1,000,000 = 0.015 (Cumulative: 0.19318)
-    if (r < 0.19318) return { type: 'win', result: '₦10', value: 10 };
+  // --- LOGIC: DETERMINISTIC / STATIC PRIZE DISTRIBUTION ---
+  const determineNodeOutcome = (nodeId: number) => {
+    // Knuth's multiplicative hash ensures the prize is permanently locked to the Node ID
+    // until changed by a future admin database.
+    let hash = (nodeId * 2654435761) % 4294967296;
+    let r = hash / 4294967296; 
     
-    // Remaining ~80.68% Loss
-    return { 
-      type: 'loss', 
-      result: ROASTS[Math.floor(Math.random() * ROASTS.length)], 
-      value: 0 
-    };
+    // Cumulative probabilities based on exactly 1,000,000 nodes.
+    if (r < 0.0002) return { type: 'win', result: '₦10,000', value: 10000 };          // 200 nodes
+    if (r < 0.00035) return { type: 'win', result: '₦5,000', value: 5000 };           // 150 nodes
+    if (r < 0.00065) return { type: 'win', result: '₦2,500', value: 2500 };           // 300 nodes
+    if (r < 0.00265) return { type: 'win', result: '₦1,500', value: 1500 };           // 2000 nodes
+    if (r < 0.00765) return { type: 'win', result: '₦1,000', value: 1000 };           // 5000 nodes
+    if (r < 0.00865) return { type: 'win', result: '₦325', value: 325 };              // 1000 nodes
+    if (r < 0.03865) return { type: 'win', result: '₦200', value: 200 };              // 30000 nodes
+    if (r < 0.05365) return { type: 'win', result: '₦70', value: 70 };                // 15000 nodes
+    if (r < 0.09865) return { type: 'win', result: '₦60', value: 60 };                // 45000 nodes
+    if (r < 0.14365) return { type: 'win', result: '₦50', value: 50 };                // 45000 nodes
+    if (r < 0.16365) return { type: 'win', result: '₦30', value: 30 };                // 20000 nodes
+    if (r < 0.16865) return { type: 'win', result: '₦25', value: 25 };                // 5000 nodes
+    if (r < 0.18365) return { type: 'win', result: '₦20', value: 20 };                // 15000 nodes
+    if (r < 0.19865) return { type: 'win', result: '₦10', value: 10 };                // 15000 nodes
+    
+    // Remaining ~80.135% Loss. Roast is also tied statically to the Node ID!
+    const roastIndex = nodeId % ROASTS.length;
+    return { type: 'loss', result: ROASTS[roastIndex], value: 0 };
   };
 
   // --- LOGIC: CHECKOUT & PROCESSING ---
@@ -197,7 +190,7 @@ export default function Home() {
 
     try {
       const results = selectedNodes.map(nodeId => {
-        const outcome = determineNodeOutcome();
+        const outcome = determineNodeOutcome(nodeId);
         return {
           id: nodeId,
           type: outcome.type,
@@ -290,8 +283,6 @@ export default function Home() {
 
     const sold = isNodeSold(nodeId);
     const isSelected = selectedNodes.includes(nodeId);
-    
-    // 👇 PASTE THE UPDATED SPONSOR & STYLE LOGIC HERE 👇
     const sponsor = SPONSORED_NODES[nodeId];
     const sponsorImg = sponsor?.url;
     
@@ -311,7 +302,6 @@ export default function Home() {
       borderColor = '#10B981';
       shadow = '0 0 15px rgba(16,185,129,0.4)';
     }
-    // 👆 END OF STYLE LOGIC 👆
 
     sectorNodes.push(
       <button 
@@ -369,8 +359,8 @@ export default function Home() {
         </div>
         
         <h2 style={{ fontSize: '1.8rem', fontWeight: '900', color: '#FFFFFF', margin: '0 0 12px 0', lineHeight: '1.2' }}>
-          Be Among The Lucky Investors. <br/>
-          <span style={{ color: '#9CA3AF' }}>Secure Your Digital Fortune.</span>
+          Stand A Chance To Win <br/>
+          <span style={{ color: '#FBBF24' }}>Up To ₦1 Million.</span>
         </h2>
         
         <p style={{ color: '#9CA3AF', fontSize: '0.95rem', margin: '0 0 24px 0', lineHeight: '1.6' }}>
