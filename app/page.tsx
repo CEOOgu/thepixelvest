@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "./lib/supabase";
-import { usePaystackPayment } from "react-paystack";
+import Script from "next/script";
 
 // --- GLOBAL PWA TRAP ---
 // Catches the download signal instantly before React even boots
@@ -143,16 +143,7 @@ export default function Home() {
   const [tempAuthInput, setTempAuthInput] = useState("");
   const [tempPassInput, setTempPassInput] = useState("");
 
-  // --- PAYSTACK INTEGRATION CONFIGURATION ---
-  const paystackConfig = {
-    reference: new Date().getTime().toString() + "-" + Math.floor(Math.random() * 1000),
-    email: userIdentifier.includes('@') ? userIdentifier : `${userIdentifier || 'guest'}@thepixelvest.com`,
-    amount: (parseInt(fundAmount) || 0) * 100,
-    publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "",
-  };
-
-  const initializePayment = usePaystackPayment(paystackConfig);
-
+  // --- NATIVE PAYSTACK INTEGRATION ---
   const handlePaystackSuccess = async (reference: any) => {
     setIsProcessing(true);
     try {
@@ -160,6 +151,7 @@ export default function Home() {
       const newBalance = walletBalance + addedAmount;
       const { error } = await supabase.from('users').update({ wallet_balance: newBalance }).eq('phone', userIdentifier);
       if (error) throw error;
+      
       setWalletBalance(newBalance);
       setFundAmount("");
       alert(`Payment Successful! ₦${addedAmount.toLocaleString()} added to your vault.`);
@@ -170,21 +162,35 @@ export default function Home() {
     }
   };
 
-  const handlePaystackClose = () => { console.log("Paystack popup closed."); };
+  const handlePaystackClose = () => {
+    console.log("Paystack popup closed.");
+  };
 
   const triggerFunding = () => {
     if (!fundAmount || parseInt(fundAmount) < 100) return alert("Minimum deposit is ₦100.");
-    initializePayment({ onSuccess: handlePaystackSuccess, onClose: handlePaystackClose });
+    
+    // Bypass the NPM package bug and use the native inline script directly
+    const paystack = (window as any).PaystackPop.setup({
+      key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "",
+      email: userIdentifier.includes('@') ? userIdentifier : `${userIdentifier || 'guest'}@thepixelvest.com`,
+      amount: (parseInt(fundAmount) || 0) * 100,
+      ref: new Date().getTime().toString() + "-" + Math.floor(Math.random() * 1000),
+      callback: function(response: any) {
+        handlePaystackSuccess(response.reference);
+      },
+      onClose: function() {
+        handlePaystackClose();
+      }
+    });
+    paystack.openIframe();
   };
 
   // --- LOGIC: BOOT CHECK & GLOBAL DATA FETCH ---
   useEffect(() => {
-    // 1. REGISTER SERVICE WORKER FOR INSTANT INSTALL
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(console.error);
     }
     
-    // 2. CAPTURE GLOBAL PWA TRAP
     if (globalInstallPrompt) {
       setDeferredPrompt(globalInstallPrompt);
     }
@@ -403,6 +409,9 @@ export default function Home() {
   return (
     <main style={{ backgroundColor: '#030712', minHeight: '100vh', width: '100%', maxWidth: '480px', margin: '0 auto', color: '#ffffff', fontFamily: 'system-ui, -apple-system, sans-serif', paddingBottom: '120px', position: 'relative', overflowX: 'hidden', boxSizing: 'border-box' }}>
       
+      {/* NATIVE PAYSTACK INJECTION SCRIPT */}
+      <Script src="https://js.paystack.co/v1/inline.js" strategy="lazyOnload" />
+
       {/* HEADER */}
       <div style={{ position: 'sticky', top: 0, zIndex: 40, backgroundColor: 'rgba(3, 7, 18, 0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '16px', paddingTop: 'max(16px, env(safe-area-inset-top))', boxSizing: 'border-box', width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
