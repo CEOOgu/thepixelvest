@@ -4,6 +4,16 @@ import { useState, useEffect } from "react";
 import { supabase } from "./lib/supabase";
 import { usePaystackPayment } from "react-paystack";
 
+// --- GLOBAL PWA TRAP ---
+// Catches the download signal instantly before React even boots
+let globalInstallPrompt: any = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    globalInstallPrompt = e;
+  });
+}
+
 // --- SYSTEM CONSTANTS & B2B FRAMEWORK ---
 const NODES_PER_PAGE = 100;
 const TOTAL_NODES = 1000000;
@@ -18,7 +28,7 @@ const SPONSORED_NODES: Record<number, { url: string; highlight?: string }> = {
   },
 };
 
-// --- SIMULATED LIVE WINS (Expanded to 30 Items) ---
+// --- SIMULATED LIVE WINS ---
 const RECENT_WINS = [
   { name: "0814***921", amount: "₦10,000" }, { name: "Emeka_V", amount: "₦2,500" },
   { name: "0902***443", amount: "₦5,000" }, { name: "Odogwu", amount: "₦1,500" },
@@ -137,7 +147,7 @@ export default function Home() {
   const paystackConfig = {
     reference: new Date().getTime().toString() + "-" + Math.floor(Math.random() * 1000),
     email: userIdentifier.includes('@') ? userIdentifier : `${userIdentifier || 'guest'}@thepixelvest.com`,
-    amount: (parseInt(fundAmount) || 0) * 100, // Paystack counts in Kobo (₦1 = 100 kobo)
+    amount: (parseInt(fundAmount) || 0) * 100,
     publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "",
   };
 
@@ -148,11 +158,8 @@ export default function Home() {
     try {
       const addedAmount = parseInt(fundAmount);
       const newBalance = walletBalance + addedAmount;
-      
-      // Update Supabase Wallet
       const { error } = await supabase.from('users').update({ wallet_balance: newBalance }).eq('phone', userIdentifier);
       if (error) throw error;
-      
       setWalletBalance(newBalance);
       setFundAmount("");
       alert(`Payment Successful! ₦${addedAmount.toLocaleString()} added to your vault.`);
@@ -163,9 +170,7 @@ export default function Home() {
     }
   };
 
-  const handlePaystackClose = () => {
-    console.log("Paystack popup closed.");
-  };
+  const handlePaystackClose = () => { console.log("Paystack popup closed."); };
 
   const triggerFunding = () => {
     if (!fundAmount || parseInt(fundAmount) < 100) return alert("Minimum deposit is ₦100.");
@@ -174,6 +179,16 @@ export default function Home() {
 
   // --- LOGIC: BOOT CHECK & GLOBAL DATA FETCH ---
   useEffect(() => {
+    // 1. REGISTER SERVICE WORKER FOR INSTANT INSTALL
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(console.error);
+    }
+    
+    // 2. CAPTURE GLOBAL PWA TRAP
+    if (globalInstallPrompt) {
+      setDeferredPrompt(globalInstallPrompt);
+    }
+
     const initApp = async () => {
       const { data } = await supabase.from('secured_nodes').select('node_id');
       if (data) setSoldSessionNodes(data.map(n => n.node_id));
@@ -190,7 +205,6 @@ export default function Home() {
           }
         }
       } else {
-        // Open Login Portal immediately on boot for new users
         setModal({ isOpen: true, type: 'login', payload: [] });
       }
     };
@@ -198,7 +212,11 @@ export default function Home() {
     initApp();
 
     const interval = setInterval(() => setCurrentWinIdx((prev) => (prev + 1) % RECENT_WINS.length), 4000);
-    const handleBeforeInstallPrompt = (e: any) => { e.preventDefault(); setDeferredPrompt(e); };
+    const handleBeforeInstallPrompt = (e: any) => { 
+      e.preventDefault(); 
+      setDeferredPrompt(e); 
+      globalInstallPrompt = e; 
+    };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     setIsIOS(!!window.navigator.userAgent.match(/iPad/i) || !!window.navigator.userAgent.match(/iPhone/i));
 
@@ -206,10 +224,15 @@ export default function Home() {
   }, []);
 
   const handleAppInstall = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') setDeferredPrompt(null);
+    const promptToUse = deferredPrompt || globalInstallPrompt;
+
+    if (promptToUse) {
+      promptToUse.prompt();
+      const { outcome } = await promptToUse.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+        globalInstallPrompt = null;
+      }
     } else {
       setModal({ isOpen: true, type: 'install-help', payload: [] });
     }
@@ -233,7 +256,6 @@ export default function Home() {
     }
   };
 
-  // --- LOGIC: DETERMINISTIC / STATIC PRIZE DISTRIBUTION ---
   const determineNodeOutcome = (nodeId: number) => {
     if (nodeId <= 200) {
       const bonusHash = (nodeId * 73) % 200; 
@@ -243,10 +265,8 @@ export default function Home() {
         return { type: 'win', result: `₦${winAmt.toLocaleString()}`, value: winAmt };
       }
     }
-
     let hash = (nodeId * 2654435761) % 4294967296;
     let r = hash / 4294967296; 
-    
     if (r < 0.0002) return { type: 'win', result: '₦10,000', value: 10000 };
     if (r < 0.00035) return { type: 'win', result: '₦5,000', value: 5000 };
     if (r < 0.00065) return { type: 'win', result: '₦2,500', value: 2500 };
@@ -261,28 +281,22 @@ export default function Home() {
     if (r < 0.16865) return { type: 'win', result: '₦25', value: 25 };
     if (r < 0.18365) return { type: 'win', result: '₦20', value: 20 };
     if (r < 0.19865) return { type: 'win', result: '₦10', value: 10 };
-    
-    const roastIndex = nodeId % ROASTS.length;
-    return { type: 'loss', result: ROASTS[roastIndex], value: 0 };
+    return { type: 'loss', result: ROASTS[nodeId % ROASTS.length], value: 0 };
   };
 
-  // --- LOGIC: AUTHENTICATE & PERSIST SESSION ---
   const handleAuth = async () => {
     if (tempAuthInput.length < 5) return alert("Please enter a valid Phone or Email.");
     setIsProcessing(true);
     try {
       let { data: user, error } = await supabase.from('users').select('*').eq('phone', tempAuthInput).single();
-      
       if (!user) {
         const { data: newUser, error: insertError } = await supabase.from('users').insert([{ phone: tempAuthInput, password: tempPassInput, wallet_balance: 0 }]).select().single();
         if (insertError) throw insertError;
         user = newUser;
       }
-
       setUserIdentifier(user.phone);
       setWalletBalance(user.wallet_balance || 0);
       if (user.pin) { setHasPin(true); setSavedPin(user.pin); }
-      
       localStorage.setItem('pixel_vest_user', user.phone);
       setModal({ isOpen: false, type: 'none', payload: [] });
     } catch (err: any) {
@@ -292,37 +306,29 @@ export default function Home() {
     }
   };
 
-  // --- LOGIC: CHECKOUT & SAVE TO DB ---
   const triggerCheckout = (useWallet: boolean) => {
     if (selectedNodes.length === 0) return;
     if (!userIdentifier) { setModal({ isOpen: true, type: 'login', payload: [] }); return; }
     if (useWallet && walletBalance < cartCost) return alert("Insufficient Wallet Balance!");
-    
     processCheckout(userIdentifier, walletBalance, useWallet);
   };
 
   const processCheckout = async (phone: string, currentBalance: number, useWallet: boolean) => {
     setIsProcessing(true);
     setModal({ isOpen: false, type: 'none', payload: [] });
-
     try {
       const results = selectedNodes.map(nodeId => {
         const outcome = determineNodeOutcome(nodeId);
         return { node_id: nodeId, phone: phone, outcome_type: outcome.type, amount_won: outcome.value };
       });
-
       const { error: nodeError } = await supabase.from('secured_nodes').insert(results);
       if (nodeError) throw nodeError;
-
       const sessionWon = results.reduce((total, item) => total + item.amount_won, 0);
       const newBalance = useWallet ? (currentBalance - cartCost + sessionWon) : (currentBalance + sessionWon);
-
       const { error: walletError } = await supabase.from('users').update({ wallet_balance: newBalance }).eq('phone', phone);
       if (walletError) throw walletError;
-
       setSoldSessionNodes(prev => [...prev, ...selectedNodes]);
       setWalletBalance(newBalance);
-      
       const revealPayload = results.map(r => ({ id: r.node_id, type: r.outcome_type, result: r.amount_won > 0 ? `₦${r.amount_won.toLocaleString()}` : ROASTS[r.node_id % ROASTS.length] }));
       setModal({ isOpen: true, type: 'reveal', payload: revealPayload });
       setSelectedNodes([]); 
@@ -336,43 +342,29 @@ export default function Home() {
     }
   };
 
-  // --- LOGIC: WITHDRAWALS & PIN SETUP ---
   const handlePinSetup = async () => {
     if(tempPin.length === 4) { 
       setIsProcessing(true);
       await supabase.from('users').update({ pin: tempPin }).eq('phone', userIdentifier);
-      setSavedPin(tempPin); 
-      setHasPin(true); 
-      setTempPin(""); 
-      setIsProcessing(false);
+      setSavedPin(tempPin); setHasPin(true); setTempPin(""); setIsProcessing(false);
       setModal({ isOpen: true, type: 'pin-confirm', payload: [] }); 
-    } else { 
-      alert("PIN must be exactly 4 digits."); 
-    }
+    } else { alert("PIN must be exactly 4 digits."); }
   };
 
   const executeWithdrawal = async () => {
     const amt = parseInt(withdrawAmount) || walletBalance; 
     if (amt > walletBalance) return alert("Insufficient funds!");
     setIsWithdrawing(true);
-
     const payload = withdrawType === 'bank' 
       ? { user_phone: userIdentifier, bank_name: withdrawBank, account_number: withdrawAccount, account_name: withdrawName, amount: amt, type: 'bank' }
       : { user_phone: userIdentifier, bank_name: airtimeNetwork, account_number: airtimePhone, account_name: "AIRTIME VTU", amount: amt, type: 'airtime' };
-
     const { error } = await supabase.from('withdrawals').insert(payload);
     if (error) { alert("Error: " + error.message); setIsWithdrawing(false); return; }
-
     const newBalance = walletBalance - amt;
     await supabase.from('users').update({ wallet_balance: newBalance }).eq('phone', userIdentifier);
-
     alert(`Withdrawal request for ₦${amt.toLocaleString()} sent successfully!`);
     setWalletBalance(newBalance);
-    setWithdrawBank(""); 
-    setWithdrawAccount(""); 
-    setWithdrawName(""); 
-    setWithdrawAmount(""); 
-    setAirtimePhone("");
+    setWithdrawBank(""); setWithdrawAccount(""); setWithdrawName(""); setWithdrawAmount(""); setAirtimePhone("");
     setModal({ isOpen: false, type: 'none', payload: [] });
     setIsWithdrawing(false);
   };
@@ -386,21 +378,16 @@ export default function Home() {
   for (let i = 0; i < NODES_PER_PAGE; i++) {
     const nodeId = currentSectorStart + i;
     if (nodeId > TOTAL_NODES) break;
-
     const sold = soldSessionNodes.includes(nodeId);
     const isSelected = selectedNodes.includes(nodeId);
     const sponsor = SPONSORED_NODES[nodeId];
-    
     let bgStyle = sold ? '#000000' : isSelected ? 'linear-gradient(145deg, #064E3B, #022C22)' : 'linear-gradient(145deg, #FBBF24, #B45309)'; 
     let textColor = sold ? '#333333' : isSelected ? '#10B981' : '#FEF3C7'; 
     let borderColor = sold ? (sponsor?.highlight ? '#FFFFFF' : '#111111') : isSelected ? '#10B981' : 'rgba(255,255,255,0.2)';
     let shadow = sold ? (sponsor?.highlight || 'none') : isSelected ? '0 0 15px rgba(16,185,129,0.4)' : 'inset 0 2px 4px rgba(255,255,255,0.2)';
 
     sectorNodes.push(
-      <button 
-        key={nodeId} 
-        type="button" 
-        onClick={() => toggleNode(nodeId)}
+      <button key={nodeId} type="button" onClick={() => toggleNode(nodeId)}
         style={{ 
           width: '100%', aspectRatio: '1/1', background: bgStyle, color: textColor, display: 'flex', alignItems: 'center', justifyContent: 'center', 
           fontSize: 'clamp(11px, 3.5vw, 14px)', fontWeight: '900', borderRadius: '12px', cursor: sold ? 'not-allowed' : 'pointer', border: `2px solid ${borderColor}`, 
@@ -408,9 +395,7 @@ export default function Home() {
           touchAction: 'manipulation', position: 'relative', overflow: 'hidden', padding: sponsor?.url ? '6px' : '0', boxSizing: 'border-box'
         }}
       >
-        {sponsor?.url ? (
-          <img src={sponsor.url} alt={`Sponsor ${nodeId}`} style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: sold ? 0.9 : 1 }} />
-        ) : ( nodeId )}
+        {sponsor?.url ? <img src={sponsor.url} alt={`Sponsor ${nodeId}`} style={{ width: '100%', height: '100%', objectFit: 'contain', opacity: sold ? 0.9 : 1 }} /> : nodeId }
       </button>
     );
   }
@@ -534,7 +519,6 @@ export default function Home() {
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(20px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box' }}>
           <div style={{ backgroundColor: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '24px', width: '100%', maxWidth: '400px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)' }}>
             
-            {/* LOGIN PORTAL */}
             {modal.type === 'login' && (
               <div style={{ padding: '36px 24px', textAlign: 'center' }}>
                 <div style={{ display: 'inline-block', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '6px 16px', borderRadius: '20px', marginBottom: '16px' }}>
@@ -555,7 +539,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* INSTALL MODAL */}
             {modal.type === 'install-help' && (
               <div style={{ padding: '32px 24px', textAlign: 'center' }}>
                 <h2 style={{ margin: '0 0 16px 0', fontSize: '1.5rem', fontWeight: '900' }}>Install The Pixel Vest</h2>
@@ -574,7 +557,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* REVEAL MODAL */}
             {modal.type === 'reveal' && (
               <>
                 <div style={{ padding: '24px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
@@ -599,7 +581,6 @@ export default function Home() {
               </>
             )}
 
-            {/* WALLET / DEPOSIT / WITHDRAW MODAL */}
             {modal.type === 'wallet' && (
               <div style={{ padding: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
@@ -614,7 +595,6 @@ export default function Home() {
                   <p style={{ color: '#64748B', fontSize: '0.85rem', margin: '8px 0 0 0' }}>{userIdentifier || "Guest Account"}</p>
                 </div>
                 
-                {/* WALLET TABS */}
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
                   <button onClick={() => setWalletTab('deposit')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', fontWeight: 'bold', backgroundColor: walletTab === 'deposit' ? 'rgba(255,255,255,0.1)' : 'transparent', color: walletTab === 'deposit' ? '#fff' : '#64748B', cursor: 'pointer' }}>Deposit</button>
                   <button onClick={() => setWalletTab('withdraw')} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', fontWeight: 'bold', backgroundColor: walletTab === 'withdraw' ? 'rgba(255,255,255,0.1)' : 'transparent', color: walletTab === 'withdraw' ? '#fff' : '#64748B', cursor: 'pointer' }}>Withdraw</button>
@@ -671,7 +651,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* PIN SETUP MODAL */}
             {modal.type === 'pin-setup' && (
               <div style={{ padding: '32px 24px', textAlign: 'center' }}>
                 <h2 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', fontWeight: '900' }}>Setup Security PIN</h2>
@@ -688,7 +667,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* PIN CONFIRM MODAL */}
             {modal.type === 'pin-confirm' && (
               <div style={{ padding: '32px 24px', textAlign: 'center' }}>
                 <h2 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', fontWeight: '900' }}>Enter PIN</h2>
