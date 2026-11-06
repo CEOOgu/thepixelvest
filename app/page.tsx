@@ -464,13 +464,16 @@ export default function ThePixelVestMasterApp() {
     }
     setDeviceId(storedDevice);
 
-    if (!document.getElementById("paystack-inline-js")) {
-      const script = document.createElement("script");
-      script.id = "paystack-inline-js";
-      script.src = "https://js.paystack.co/v1/inline.js";
-      script.async = true;
-      document.body.appendChild(script);
+   // Grant clipboard-write permission to Paystack checkout iframe automatically
+const observer = new MutationObserver(() => {
+  const iframes = document.querySelectorAll("iframe");
+  iframes.forEach((iframe) => {
+    if (iframe.getAttribute("allow") !== "clipboard-read; clipboard-write; payment") {
+      iframe.setAttribute("allow", "clipboard-read; clipboard-write; payment");
     }
+  });
+});
+observer.observe(document.body, { childList: true, subtree: true });
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
