@@ -86,6 +86,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Paystack Official Checkout Script */}
+        <script
+          src="https://js.paystack.co/v1/inline.js"
+          async
+        ></script>
+
         {/* Google AdSense Official Ownership & Ad Script */}
         <script
           async

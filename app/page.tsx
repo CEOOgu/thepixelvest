@@ -4,6 +4,25 @@ import React, { useState, useEffect, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ============================================================================
+// 0. GLOBAL EARLY CAPTURE FOR NATIVE ANDROID APK INSTALL & PAYSTACK PRELOAD
+// ============================================================================
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e: any) => {
+    e.preventDefault();
+    (window as any).__pvDeferredPrompt = e;
+  });
+
+  // Preload Paystack script immediately at the window level
+  if (!document.getElementById("paystack-inline-js")) {
+    const s = document.createElement("script");
+    s.id = "paystack-inline-js";
+    s.src = "https://js.paystack.co/v1/inline.js";
+    s.async = true;
+    document.head.appendChild(s);
+  }
+}
+
+// ============================================================================
 // 1. CONFIGURATION & INITIALIZATION
 // ============================================================================
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -13,6 +32,7 @@ const supabase =
     ? createClient(supabaseUrl, supabaseAnonKey)
     : null;
 
+// Hardcoded Live Paystack Public Key so Vercel test env vars never override it
 const PAYSTACK_PUBLIC_KEY = "pk_live_4f604b2d9d9689f50eba439e704600844f7dfd01";
 
 const ADSENSE_CLIENT_ID = "ca-pub-9204985294084444";
@@ -327,7 +347,7 @@ function normalizePhone(phone: string): string {
 }
 
 // ============================================================================
-// 4. COMPACT LOCKED-HEIGHT GOOGLE ADSENSE BANNER (NEVER SHOWS GIANT BLACK BOX)
+// 4. COMPACT LOCKED-HEIGHT GOOGLE ADSENSE BANNER
 // ============================================================================
 function AdSenseBanner({
   slotId = "9204985294",
@@ -370,9 +390,9 @@ function AdSenseBanner({
 // 5. MAIN APPLICATION COMPONENT
 // ============================================================================
 export default function ThePixelVestMasterApp() {
-  const [currentSector, setCurrentSector] = useState<number>(5001);
-  const [sectorInput, setSectorInput] = useState<string>("5001");
-  const [searchNodeInput, setSearchNodeInput] = useState<string>("500052");
+  const [currentSector, setCurrentSector] = useState<number>(1);
+  const [sectorInput, setSectorInput] = useState<string>("1");
+  const [searchNodeInput, setSearchNodeInput] = useState<string>("1");
 
   const [user, setUser] = useState<any>(null);
   const [deviceId, setDeviceId] = useState<string>("");
@@ -407,6 +427,7 @@ export default function ThePixelVestMasterApp() {
     "fund"
   );
   const [fundAmount, setFundAmount] = useState<string>("500");
+  const [paystackConnecting, setPaystackConnecting] = useState<boolean>(false);
   const [withdrawAmount, setWithdrawAmount] = useState<string>("");
   const [bankName, setBankName] = useState<string>("");
   const [accountNumber, setAccountNumber] = useState<string>("");
@@ -417,14 +438,13 @@ export default function ThePixelVestMasterApp() {
   const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(false);
   const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
   const [adminPinInput, setAdminPinInput] = useState<string>("");
-  const [editNodeId, setEditNodeId] = useState<string>("500001");
+  const [editNodeId, setEditNodeId] = useState<string>("1");
   const [editBrandName, setEditBrandName] = useState<string>("");
   const [editLogoUrl, setEditLogoUrl] = useState<string>("");
   const [editCustomPrize, setEditCustomPrize] = useState<string>("");
   const [adminSaving, setAdminSaving] = useState<boolean>(false);
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showInstallModal, setShowInstallModal] = useState<boolean>(false);
   const [legalModal, setLegalModal] = useState<"terms" | "privacy" | null>(
     null
   );
@@ -453,6 +473,7 @@ export default function ThePixelVestMasterApp() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    // 1. Device Fingerprint
     let storedDevice = localStorage.getItem("pixelvest_device_lock");
     if (!storedDevice) {
       storedDevice =
@@ -464,27 +485,48 @@ export default function ThePixelVestMasterApp() {
     }
     setDeviceId(storedDevice);
 
-   // Grant clipboard-write permission to Paystack checkout iframe automatically
-const observer = new MutationObserver(() => {
-  const iframes = document.querySelectorAll("iframe");
-  iframes.forEach((iframe) => {
-    if (iframe.getAttribute("allow") !== "clipboard-read; clipboard-write; payment") {
-      iframe.setAttribute("allow", "clipboard-read; clipboard-write; payment");
+    // 2. Ensure Manifest & Service Worker are registered for native APK install
+    if (!document.querySelector('link[rel="manifest"]')) {
+      const link = document.createElement("link");
+      link.rel = "manifest";
+      link.href = "/manifest.json";
+      document.head.appendChild(link);
     }
-  });
-});
-observer.observe(document.body, { childList: true, subtree: true });
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
 
+    // Read early-captured install prompt if it fired before React hydrated
+    if ((window as any).__pvDeferredPrompt) {
+      setDeferredPrompt((window as any).__pvDeferredPrompt);
+    }
+
     const onBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
+      (window as any).__pvDeferredPrompt = e;
       setDeferredPrompt(e);
     };
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
 
+    // 3. Grant clipboard-write permission to Paystack iframes automatically
+    const observer = new MutationObserver(() => {
+      const iframes = document.querySelectorAll("iframe");
+      iframes.forEach((iframe) => {
+        if (
+          iframe.getAttribute("allow") !==
+          "clipboard-read; clipboard-write; payment"
+        ) {
+          iframe.setAttribute(
+            "allow",
+            "clipboard-read; clipboard-write; payment"
+          );
+        }
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // 4. Referral Param (?ref=...)
     const params = new URLSearchParams(window.location.search);
     const refParam = params.get("ref");
     if (refParam) {
@@ -496,6 +538,7 @@ observer.observe(document.body, { childList: true, subtree: true });
       if (savedRef) setAuthReferral(savedRef);
     }
 
+    // 5. Restore Local Overrides + User Session
     const localOverrides = localStorage.getItem("pixelvest_node_overrides");
     if (localOverrides) {
       try {
@@ -508,10 +551,11 @@ observer.observe(document.body, { childList: true, subtree: true });
       fetchUserSession(savedPhone);
     }
 
-    fetchSectorBoardData(5001);
+    fetchSectorBoardData(1);
 
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+      observer.disconnect();
     };
   }, []);
 
@@ -985,6 +1029,9 @@ observer.observe(document.body, { childList: true, subtree: true });
     }
   };
 
+  // ============================================================================
+  // BULLETPROOF SELF-HEALING PAYSTACK LIVE CHECKOUT
+  // ============================================================================
   const handleFundWithPaystack = () => {
     if (!user) {
       setShowWalletModal(false);
@@ -998,62 +1045,105 @@ observer.observe(document.body, { childList: true, subtree: true });
       return;
     }
 
-    const PaystackPop = (window as any).PaystackPop;
-    if (!PaystackPop) {
-      showToast(
-        "Paystack gateway is initializing. Tap again in 2 seconds.",
-        "info"
-      );
+    const openPaystackModalNow = () => {
+      setPaystackConnecting(false);
+      const PaystackPop = (window as any).PaystackPop;
+      if (!PaystackPop) {
+        showToast(
+          "Could not load Paystack. Please check your internet connection.",
+          "error"
+        );
+        return;
+      }
+
+      const cleanPhone = normalizePhone(user.phone);
+      const txRef = `PV_${cleanPhone}_${Date.now()}`;
+
+      const handler = PaystackPop.setup({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: `${cleanPhone}@thepixelvest.com.ng`,
+        amount: Math.round(amountNaira * 100),
+        currency: "NGN",
+        ref: txRef,
+        metadata: {
+          custom_fields: [
+            {
+              display_name: "Player Phone",
+              variable_name: "player_phone",
+              value: cleanPhone,
+            },
+          ],
+        },
+        callback: function (response: any) {
+          const currentMain = getMainBalance(user);
+          const newMain = currentMain + amountNaira;
+
+          updateUserRecord(cleanPhone, { wallet_balance: newMain }).then(() => {
+            if (supabase) {
+              supabase.from("transactions").insert([
+                {
+                  user_phone: cleanPhone,
+                  type: "deposit",
+                  amount: amountNaira,
+                  status: "completed",
+                  reference: response.reference,
+                },
+              ]);
+            }
+            setShowWalletModal(false);
+            showToast(
+              `₦${amountNaira.toLocaleString()} credited to your Main Wallet!`,
+              "success"
+            );
+          });
+        },
+        onClose: function () {
+          showToast("Payment window closed.", "info");
+        },
+      });
+
+      handler.openIframe();
+
+      // Unlock clipboard copy inside Paystack iframe
+      setTimeout(() => {
+        const iframes = document.querySelectorAll("iframe");
+        iframes.forEach((iframe) => {
+          iframe.setAttribute(
+            "allow",
+            "clipboard-read; clipboard-write; payment"
+          );
+        });
+      }, 500);
+    };
+
+    // If Paystack is already in memory, launch immediately
+    if ((window as any).PaystackPop) {
+      openPaystackModalNow();
       return;
     }
 
-    const cleanPhone = normalizePhone(user.phone);
-    const txRef = `PV_${cleanPhone}_${Date.now()}`;
+    // Otherwise dynamically reload script and auto-launch on load
+    setPaystackConnecting(true);
+    const existingScript = document.getElementById("paystack-inline-js");
+    if (existingScript) {
+      existingScript.remove();
+    }
 
-    const handler = PaystackPop.setup({
-      key: PAYSTACK_PUBLIC_KEY,
-      email: `${cleanPhone}@thepixelvest.com.ng`,
-      amount: Math.round(amountNaira * 100),
-      currency: "NGN",
-      ref: txRef,
-      metadata: {
-        custom_fields: [
-          {
-            display_name: "Player Phone",
-            variable_name: "player_phone",
-            value: cleanPhone,
-          },
-        ],
-      },
-      callback: function (response: any) {
-        const currentMain = getMainBalance(user);
-        const newMain = currentMain + amountNaira;
-
-        updateUserRecord(cleanPhone, { wallet_balance: newMain }).then(() => {
-          if (supabase) {
-            supabase.from("transactions").insert([
-              {
-                user_phone: cleanPhone,
-                type: "deposit",
-                amount: amountNaira,
-                status: "completed",
-                reference: response.reference,
-              },
-            ]);
-          }
-          setShowWalletModal(false);
-          showToast(
-            `₦${amountNaira.toLocaleString()} credited to your Main Wallet!`,
-            "success"
-          );
-        });
-      },
-      onClose: function () {
-        showToast("Payment window closed.", "info");
-      },
-    });
-
-    handler.openIframe();
+    const script = document.createElement("script");
+    script.id = "paystack-inline-js";
+    script.src = `https://js.paystack.co/v1/inline.js?v=${Date.now()}`;
+    script.async = true;
+    script.onload = () => {
+      openPaystackModalNow();
+    };
+    script.onerror = () => {
+      setPaystackConnecting(false);
+      showToast(
+        "Network blocked Paystack. Please open www.thepixelvest.com.ng in Chrome.",
+        "error"
+      );
+    };
+    document.head.appendChild(script);
   };
 
   const handleWithdrawSubmit = async (e: React.FormEvent) => {
@@ -1236,17 +1326,74 @@ observer.observe(document.body, { childList: true, subtree: true });
     setSelectedNode(cleanNum);
   };
 
+  // ============================================================================
+  // DIRECT APP INSTALL & DOWNLOAD ENGINE (NO PASSIVE INSTRUCTION POPUP)
+  // ============================================================================
   const handleInstallApp = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === "accepted") {
-        setDeferredPrompt(null);
-        showToast("Installing The Pixel Vest App...", "success");
-      }
-    } else {
-      setShowInstallModal(true);
+    const promptEvent =
+      deferredPrompt ||
+      (typeof window !== "undefined" ? (window as any).__pvDeferredPrompt : null);
+
+    // 1. Trigger Native Android WebAPK Install Dialog if available
+    if (promptEvent) {
+      try {
+        promptEvent.prompt();
+        const { outcome } = await promptEvent.userChoice;
+        if (outcome === "accepted") {
+          setDeferredPrompt(null);
+          (window as any).__pvDeferredPrompt = null;
+          showToast("Installing The Pixel Vest App to your phone...", "success");
+        }
+        return;
+      } catch (err) {}
     }
+
+    // 2. If user is inside an In-App Browser on Android (Facebook, X, Copilot),
+    // automatically break out into Google Chrome where the APK installer runs,
+    // AND trigger an immediate direct download of the PixelVest Standalone App file!
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const isAndroid = /android/i.test(ua);
+    const isInApp = /(FBAN|FBAV|Instagram|Twitter|Line|MicroMessenger|BingWeb|Sapphire)/i.test(
+      ua
+    );
+
+    if (isAndroid && isInApp) {
+      showToast("Opening Chrome App Installer...", "success");
+      window.location.href =
+        "intent://www.thepixelvest.com.ng/?source=pwa#Intent;scheme=https;package=com.android.chrome;end";
+      return;
+    }
+
+    // 3. Direct App Launcher File Download so clicking "Install App" ALWAYS downloads immediately
+    showToast("Downloading The Pixel Vest App...", "success");
+    const appHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#07090e" />
+<title>The Pixel Vest</title>
+<link rel="icon" href="https://www.thepixelvest.com.ng/icon.png" />
+<style>
+  html,body,iframe { margin:0; padding:0; width:100%; height:100%; background:#07090e; border:0; overflow:hidden; }
+</style>
+</head>
+<body>
+  <iframe src="https://www.thepixelvest.com.ng/?source=pwa" allow="clipboard-read; clipboard-write; payment"></iframe>
+</body>
+</html>`;
+
+    const blob = new Blob([appHtml], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "ThePixelVest-App.html";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const copyReferralLink = () => {
@@ -1255,7 +1402,7 @@ observer.observe(document.body, { childList: true, subtree: true });
       return;
     }
     const cleanPhone = normalizePhone(user.phone);
-    const url = `https://thepixelvest.com.ng/?ref=${cleanPhone}`;
+    const url = `https://www.thepixelvest.com.ng/?ref=${cleanPhone}`;
     navigator.clipboard.writeText(url);
     showToast(
       "Referral Link Copied! You earn ₦50 when your friend funds & plays!",
@@ -1272,7 +1419,7 @@ observer.observe(document.body, { childList: true, subtree: true });
   const endNodeNum = currentSector * NODES_PER_SECTOR;
 
   // ============================================================================
-  // 6. RENDER UI WITH 100% EMBEDDED MASTER CSS (ZERO RELIANCE ON TAILWIND)
+  // 6. RENDER UI WITH 100% EMBEDDED MASTER CSS
   // ============================================================================
   return (
     <div className="pv-root">
@@ -1294,7 +1441,6 @@ observer.observe(document.body, { childList: true, subtree: true });
           margin: 0 auto;
           padding: 12px 14px 80px 14px;
         }
-        /* Top Payout Ticker */
         .pv-ticker {
           background-color: #082016;
           border: 1px solid rgba(16, 185, 129, 0.45);
@@ -1311,7 +1457,6 @@ observer.observe(document.body, { childList: true, subtree: true });
           font-size: 13px;
           line-height: 1.35;
         }
-        /* Brand Header */
         .pv-header-row {
           display: flex;
           align-items: center;
@@ -1339,15 +1484,16 @@ observer.observe(document.body, { childList: true, subtree: true });
           font-size: 19px;
         }
         .pv-install-btn {
-          background-color: rgba(16, 185, 129, 0.15);
-          border: 1px solid rgba(16, 185, 129, 0.5);
-          color: #34d399 !important;
-          font-weight: 800;
+          background-color: #10b981 !important;
+          border: 1px solid #34d399 !important;
+          color: #000000 !important;
+          font-weight: 900;
           font-size: 11px;
-          padding: 7px 11px;
+          padding: 8px 12px;
           border-radius: 9px;
           cursor: pointer;
           white-space: nowrap;
+          box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
         }
         .pv-subtitle {
           margin: 0 0 12px 0;
@@ -1355,7 +1501,6 @@ observer.observe(document.body, { childList: true, subtree: true });
           font-size: 13px;
           line-height: 1.4;
         }
-        /* Dual Wallet Boxes */
         .pv-wallets-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -1402,7 +1547,6 @@ observer.observe(document.body, { childList: true, subtree: true });
           font-weight: 900;
           color: #fbbf24 !important;
         }
-        /* Action Buttons Row */
         .pv-actions-row {
           display: flex;
           flex-wrap: wrap;
@@ -1447,7 +1591,6 @@ observer.observe(document.body, { childList: true, subtree: true });
           border-top: 1px solid #1f2430;
           margin: 12px 0;
         }
-        /* Legend */
         .pv-legend {
           margin-bottom: 12px;
           font-size: 13px;
@@ -1476,7 +1619,6 @@ observer.observe(document.body, { childList: true, subtree: true });
           display: inline-block;
           flex-shrink: 0;
         }
-        /* Search & Refresh */
         .pv-search-row {
           display: flex;
           gap: 8px;
@@ -1519,7 +1661,6 @@ observer.observe(document.body, { childList: true, subtree: true });
           border-radius: 10px;
           cursor: pointer;
         }
-        /* Compact Locked AdSense Bar */
         .pv-ad-box {
           margin: 12px 0;
           padding: 6px 10px;
@@ -1557,7 +1698,6 @@ observer.observe(document.body, { childList: true, subtree: true });
           opacity: 0.75;
           pointer-events: none;
         }
-        /* Sector Navigation */
         .pv-sector-info {
           font-size: 13px;
           color: #9ca3af !important;
@@ -1618,7 +1758,6 @@ observer.observe(document.body, { childList: true, subtree: true });
           border-radius: 10px;
           cursor: pointer;
         }
-        /* EXACT 3-COLUMN GOLDEN DIAMOND GRID */
         .pv-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
@@ -1709,7 +1848,6 @@ observer.observe(document.body, { childList: true, subtree: true });
           font-weight: 900;
           color: #6b7280 !important;
         }
-        /* Info & Footer */
         .pv-info-card {
           margin-top: 24px;
           background-color: #0c0f16;
@@ -1749,10 +1887,9 @@ observer.observe(document.body, { childList: true, subtree: true });
           cursor: pointer;
           padding: 0;
         }
-        /* Modals */
         .pv-modal-backdrop {
           position: fixed;
-           inset: 0;
+          inset: 0;
           top: 0; left: 0; right: 0; bottom: 0;
           background-color: rgba(0, 0, 0, 0.84);
           z-index: 9999;
@@ -1815,7 +1952,7 @@ observer.observe(document.body, { childList: true, subtree: true });
           <p className="pv-ticker-text">{LIVE_TICKER_MESSAGES[tickerIndex]}</p>
         </div>
 
-        {/* 2. BRAND HEADER + APK INSTALL BUTTON */}
+        {/* 2. BRAND HEADER + DIRECT APK INSTALL / DOWNLOAD BUTTON */}
         <div className="pv-header-row">
           <div className="pv-brand-wrap">
             <h1 className="pv-brand-title">
@@ -1824,7 +1961,7 @@ observer.observe(document.body, { childList: true, subtree: true });
           </div>
 
           <button onClick={handleInstallApp} className="pv-install-btn">
-            📲 Install App
+            📲 Download App
           </button>
         </div>
 
@@ -1920,7 +2057,7 @@ observer.observe(document.body, { childList: true, subtree: true });
             max={1000000}
             value={searchNodeInput}
             onChange={(e) => setSearchNodeInput(e.target.value)}
-            placeholder="500052"
+            placeholder="Enter Node # (1 - 1,000,000)"
             className="pv-input"
           />
           <button onClick={handleJumpToNode} className="pv-btn-go">
@@ -2640,10 +2777,13 @@ observer.observe(document.body, { childList: true, subtree: true });
                 />
                 <button
                   onClick={handleFundWithPaystack}
+                  disabled={paystackConnecting}
                   className="pv-btn-emerald"
                   style={{ width: "100%", padding: "12px" }}
                 >
-                  PAY ₦{Number(fundAmount || 0).toLocaleString()} WITH PAYSTACK
+                  {paystackConnecting
+                    ? "OPENING PAYSTACK CHECKOUT..."
+                    : `PAY ₦${Number(fundAmount || 0).toLocaleString()} WITH PAYSTACK`}
                 </button>
               </div>
             )}
@@ -2735,7 +2875,7 @@ observer.observe(document.body, { childList: true, subtree: true });
                     wordBreak: "break-all",
                   }}
                 >
-                  https://thepixelvest.com.ng/?ref=
+                  https://www.thepixelvest.com.ng/?ref=
                   {user ? normalizePhone(user.phone) : "YOUR_PHONE"}
                 </div>
                 <button
@@ -2913,37 +3053,7 @@ observer.observe(document.body, { childList: true, subtree: true });
       )}
 
       {/* ==================================================================== */}
-      {/* MODAL 6: APK INSTALL GUIDE MODAL                                     */}
-      {/* ==================================================================== */}
-      {showInstallModal && (
-        <div className="pv-modal-backdrop">
-          <div className="pv-modal-card">
-            <h3 style={{ margin: "0 0 10px 0", fontSize: 16, fontWeight: 900 }}>
-              📲 Install The Pixel Vest App
-            </h3>
-            <p style={{ fontSize: 12, color: "#d1d5db", lineHeight: 1.5 }}>
-              1. <strong>On Android (Chrome):</strong> Tap the{" "}
-              <strong>3 dots (⋮)</strong> at the top right of your browser and
-              tap <strong>&quot;Install App&quot;</strong>.
-              <br />
-              <br />
-              2. <strong>On iPhone (Safari):</strong> Tap{" "}
-              <strong>Share (↑)</strong> at the bottom and select{" "}
-              <strong>&quot;Add to Home Screen&quot;</strong>.
-            </p>
-            <button
-              onClick={() => setShowInstallModal(false)}
-              className="pv-btn-emerald"
-              style={{ width: "100%", padding: "11px", marginTop: 10 }}
-            >
-              Got It
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ==================================================================== */}
-      {/* MODAL 7: TERMS & PRIVACY POLICY MODAL                                */}
+      {/* MODAL 6: TERMS & PRIVACY POLICY MODAL                                */}
       {/* ==================================================================== */}
       {legalModal && (
         <div className="pv-modal-backdrop">
