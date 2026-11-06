@@ -13,9 +13,7 @@ const supabase =
     ? createClient(supabaseUrl, supabaseAnonKey)
     : null;
 
-const PAYSTACK_PUBLIC_KEY =
-  process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ||
-  "pk_live_4f604b2d9d9689f50eba439e704600844f7dfd01";
+const PAYSTACK_PUBLIC_KEY = "pk_live_4f604b2d9d9689f50eba439e704600844f7dfd01";
 
 const ADSENSE_CLIENT_ID = "ca-pub-9204985294084444";
 const ADMIN_MASTER_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN || "2026";
