@@ -4,16 +4,35 @@ import React, { useState, useEffect, useMemo } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // ============================================================================
-// 0. GLOBAL EARLY CAPTURE FOR NATIVE ANDROID APK INSTALL & PAYSTACK PRELOAD
+// 0. GLOBAL INTERCEPTOR: PAYSTACK IFRAME CLIPBOARD PERMISSION & APK INSTALL
 // ============================================================================
 if (typeof window !== "undefined") {
+  // 1. Capture native Android WebAPK install prompt before React mounts
   window.addEventListener("beforeinstallprompt", (e: any) => {
     e.preventDefault();
     (window as any).__pvDeferredPrompt = e;
   });
 
+  // 2. Intercept iframe creation so Paystack's checkout iframe ALWAYS gets
+  // clipboard-write permission BEFORE it mounts into the DOM!
+  const originalCreateElement = document.createElement.bind(document);
+  if (!(window as any).__pvIframePatched) {
+    (window as any).__pvIframePatched = true;
+    document.createElement = function (tagName: string, options?: any): any {
+      const el = originalCreateElement(tagName, options);
+      if (tagName && tagName.toLowerCase() === "iframe") {
+        el.setAttribute(
+          "allow",
+          "clipboard-read *; clipboard-write *; payment *"
+        );
+      }
+      return el;
+    };
+  }
+
+  // 3. Preload Paystack inline script immediately
   if (!document.getElementById("paystack-inline-js")) {
-    const s = document.createElement("script");
+    const s = originalCreateElement("script");
     s.id = "paystack-inline-js";
     s.src = "https://js.paystack.co/v1/inline.js";
     s.async = true;
@@ -349,11 +368,11 @@ function normalizePhone(phone: string): string {
 }
 
 // ============================================================================
-// 4. COMPACT LOCKED-HEIGHT GOOGLE ADSENSE BANNER (OFFICIAL SLOT 3277719159)
+// 4. STRICT HORIZONTAL SMALL GOOGLE ADSENSE BANNER (50PX HEIGHT LOCKED)
 // ============================================================================
 function AdSenseBanner({
   slotId = ADSENSE_UNIT_SLOT_ID,
-  label = "SPONSORED AD SPACE",
+  label = "SPONSORED BANNER AD",
 }: {
   slotId?: string;
   label?: string;
@@ -371,19 +390,18 @@ function AdSenseBanner({
         <span className="pv-ad-placeholder">
           ⚡ Google AdSense • The Pixel Vest Partner Network
         </span>
+        {/* Pixel Vest Official Horizontal 320x50 Unit (Cannot Expand Vertically) */}
         <ins
           className="adsbygoogle"
           style={{
             display: "inline-block",
             width: "100%",
+            maxWidth: "380px",
             height: "50px",
-            maxHeight: "54px",
-            overflow: "hidden",
+            maxHeight: "50px",
           }}
           data-ad-client={ADSENSE_CLIENT_ID}
           data-ad-slot={slotId}
-          data-ad-format="auto"
-          data-full-width-responsive="true"
         />
       </div>
     </div>
@@ -449,7 +467,7 @@ export default function ThePixelVestMasterApp() {
   // Admin Studio States (Node Editor + Instant Player Wallet Credit)
   const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(false);
   const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
-  const [adminTab, setAdminTab] = useState<"wallet" | "node">("wallet");
+  const [adminTab, setAdminTab] = useState<"node" | "wallet">("node");
   const [adminPinInput, setAdminPinInput] = useState<string>("");
   const [adminCreditPhone, setAdminCreditPhone] = useState<string>("");
   const [adminCreditAmount, setAdminCreditAmount] = useState<string>("500");
@@ -462,6 +480,7 @@ export default function ThePixelVestMasterApp() {
   const [editBrandName, setEditBrandName] = useState<string>("");
   const [editLogoUrl, setEditLogoUrl] = useState<string>("");
   const [editCustomPrize, setEditCustomPrize] = useState<string>("");
+  const [editNodeIsSold, setEditNodeIsSold] = useState<boolean>(false);
   const [adminSaving, setAdminSaving] = useState<boolean>(false);
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -528,24 +547,24 @@ export default function ThePixelVestMasterApp() {
     };
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
 
-    // 3. Grant clipboard-write permission to Paystack iframes automatically
+    // 3. Grant clipboard-write permission to all iframes
     const observer = new MutationObserver(() => {
       const iframes = document.querySelectorAll("iframe");
       iframes.forEach((iframe) => {
         if (
           iframe.getAttribute("allow") !==
-          "clipboard-read; clipboard-write; payment"
+          "clipboard-read *; clipboard-write *; payment *"
         ) {
           iframe.setAttribute(
             "allow",
-            "clipboard-read; clipboard-write; payment"
+            "clipboard-read *; clipboard-write *; payment *"
           );
         }
       });
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // 4. Referral Param (?ref=...)
+    // 4. Referral Param (?ref=...) or Admin URL Param (?admin=1)
     const params = new URLSearchParams(window.location.search);
     const refParam = params.get("ref");
     if (refParam) {
@@ -557,6 +576,10 @@ export default function ThePixelVestMasterApp() {
       if (savedRef) setAuthReferral(savedRef);
     }
 
+    if (params.get("admin") === "1" || window.location.hash === "#admin") {
+      setShowAdminModal(true);
+    }
+
     // 5. Restore Pending Paystack Tx if any
     const savedPending = localStorage.getItem("pv_active_pending_tx");
     if (savedPending) {
@@ -565,7 +588,14 @@ export default function ThePixelVestMasterApp() {
       } catch (e) {}
     }
 
-    // 6. Restore Local Overrides + User Session
+    // 6. Restore Local Sold Nodes + Local Overrides + User Session
+    const localSold = localStorage.getItem("pixelvest_sold_nodes");
+    if (localSold) {
+      try {
+        setSoldNodesMap(JSON.parse(localSold));
+      } catch (e) {}
+    }
+
     const localOverrides = localStorage.getItem("pixelvest_node_overrides");
     if (localOverrides) {
       try {
@@ -622,7 +652,6 @@ export default function ThePixelVestMasterApp() {
       if (data && !error) {
         let finalUser = { ...data };
 
-        // If the player had a Paystack deposit while network was reconnecting, push it to Supabase now!
         if (unsyncedAdd > 0) {
           const syncedMain = Number(data.wallet_balance ?? 0) + unsyncedAdd;
           finalUser.wallet_balance = syncedMain;
@@ -638,7 +667,6 @@ export default function ThePixelVestMasterApp() {
           Number(cachedUser.wallet_balance ?? 0) >
             Number(data.wallet_balance ?? 0)
         ) {
-          // Ensure a newly credited local balance is pushed up rather than wiped
           const higherBal = Number(cachedUser.wallet_balance);
           finalUser.wallet_balance = higherBal;
           await supabase
@@ -708,7 +736,6 @@ export default function ThePixelVestMasterApp() {
   ) => {
     const cleanPhone = normalizePhone(rawPhone);
 
-    // 1. Idempotency Guard: Never double-credit the same Paystack reference
     const creditedRefsStr = localStorage.getItem("pv_credited_tx_refs") || "[]";
     let creditedRefs: string[] = [];
     try {
@@ -728,7 +755,6 @@ export default function ThePixelVestMasterApp() {
     localStorage.removeItem("pv_active_pending_tx");
     setPendingTx(null);
 
-    // 2. INSTANT Optimistic UI + LocalStorage Credit (0.01s before network wakes up)
     const cachedStr = localStorage.getItem(`pv_user_${cleanPhone}`);
     const currentObj =
       user && normalizePhone(user.phone) === cleanPhone
@@ -755,7 +781,6 @@ export default function ThePixelVestMasterApp() {
       "success"
     );
 
-    // 3. Queue unsynced amount in case mobile network is still waking up from bank app
     const prevUnsynced = Number(
       localStorage.getItem(`pv_unsynced_add_${cleanPhone}`) || "0"
     );
@@ -764,7 +789,6 @@ export default function ThePixelVestMasterApp() {
       String(prevUnsynced + amountNaira)
     );
 
-    // 4. Sync with Supabase with 3 automatic retries
     if (supabase) {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
@@ -791,7 +815,10 @@ export default function ThePixelVestMasterApp() {
 
           if (!upErr) {
             localStorage.removeItem(`pv_unsynced_add_${cleanPhone}`);
-            const syncedObj = { ...updatedLocalUser, wallet_balance: finalBalance };
+            const syncedObj = {
+              ...updatedLocalUser,
+              wallet_balance: finalBalance,
+            };
             setUser(syncedObj);
             localStorage.setItem(
               `pv_user_${cleanPhone}`,
@@ -810,11 +837,66 @@ export default function ThePixelVestMasterApp() {
             break;
           }
         } catch (err) {
-          // Wait 1.5s before retrying if mobile network is reconnecting
           await new Promise((r) => setTimeout(r, 1500));
         }
       }
     }
+  };
+
+  // ============================================================================
+  // BULLETPROOF 3-LAYER DATABASE + LOCAL SOLD NODE & OVERRIDE SYNC
+  // ============================================================================
+  const persistNodeLockToDatabase = async (
+    nodeId: number,
+    soldRecord: Record<string, any>
+  ) => {
+    // Layer 1: LocalStorage immediate persistence
+    setSoldNodesMap((prev) => {
+      const next = { ...prev, [nodeId]: soldRecord };
+      localStorage.setItem("pixelvest_sold_nodes", JSON.stringify(next));
+      return next;
+    });
+
+    if (!supabase) return;
+
+    // Layer 2: Save to `grid_nodes` with progressive column fallback so missing columns never block locking
+    try {
+      const { error: err1 } = await supabase
+        .from("grid_nodes")
+        .upsert([soldRecord], { onConflict: "node_id" });
+
+      if (err1) {
+        const minimalSold = {
+          node_id: nodeId,
+          owner_phone: soldRecord.owner_phone,
+          is_sold: Boolean(soldRecord.is_sold),
+          prize_won: soldRecord.prize_won ?? 0,
+        };
+        const { error: err2 } = await supabase
+          .from("grid_nodes")
+          .upsert([minimalSold], { onConflict: "node_id" });
+
+        if (err2) {
+          // Try update first, then insert if row doesn't exist
+          const { data: existingRow } = await supabase
+            .from("grid_nodes")
+            .select("node_id")
+            .eq("node_id", nodeId)
+            .maybeSingle();
+
+          if (existingRow) {
+            await supabase
+              .from("grid_nodes")
+              .update({ is_sold: Boolean(soldRecord.is_sold) })
+              .eq("node_id", nodeId);
+          } else {
+            await supabase
+              .from("grid_nodes")
+              .insert([{ node_id: nodeId, is_sold: Boolean(soldRecord.is_sold) }]);
+          }
+        }
+      }
+    } catch (e) {}
   };
 
   const fetchSectorBoardData = async (sector: number) => {
@@ -834,12 +916,16 @@ export default function ThePixelVestMasterApp() {
         .gte("node_id", startNode)
         .lte("node_id", endNode);
 
-      if (soldRows) {
+      if (soldRows && soldRows.length > 0) {
         setSoldNodesMap((prev) => {
           const next = { ...prev };
           soldRows.forEach((row: any) => {
-            next[Number(row.node_id)] = row;
+            next[Number(row.node_id)] = {
+              ...row,
+              is_sold: row.is_sold !== undefined ? Boolean(row.is_sold) : true,
+            };
           });
+          localStorage.setItem("pixelvest_sold_nodes", JSON.stringify(next));
           return next;
         });
       }
@@ -850,7 +936,7 @@ export default function ThePixelVestMasterApp() {
         .gte("node_id", startNode)
         .lte("node_id", endNode);
 
-      if (overrideRows) {
+      if (overrideRows && overrideRows.length > 0) {
         setNodeOverridesMap((prev) => {
           const next = { ...prev };
           overrideRows.forEach((row: any) => {
@@ -1073,6 +1159,9 @@ export default function ThePixelVestMasterApp() {
     }
   };
 
+  // ============================================================================
+  // UNLOCK NODE & LOCK IT PERMANENTLY IN DATABASE + LOCAL CACHE
+  // ============================================================================
   const handleUnlockNode = async () => {
     if (!selectedNode) return;
     if (!user) {
@@ -1104,13 +1193,35 @@ export default function ThePixelVestMasterApp() {
     }
 
     if (soldNodesMap[selectedNode]?.is_sold) {
-      showToast("This Node has already been unlocked!", "error");
+      showToast("This Node has already been unlocked and locked!", "error");
       return;
     }
 
     setUnlockLoading(true);
 
     try {
+      // Double-check live database before unlocking so two players can't tap the same node
+      if (supabase) {
+        const { data: liveCheck } = await supabase
+          .from("grid_nodes")
+          .select("*")
+          .eq("node_id", selectedNode)
+          .maybeSingle();
+
+        if (liveCheck && liveCheck.is_sold) {
+          setSoldNodesMap((prev) => ({
+            ...prev,
+            [selectedNode]: liveCheck,
+          }));
+          showToast(
+            "Someone else just unlocked this Node! Pick another one.",
+            "error"
+          );
+          setUnlockLoading(false);
+          return;
+        }
+      }
+
       const customOverride = nodeOverridesMap[selectedNode];
       const hasCustomPrize =
         customOverride &&
@@ -1184,14 +1295,8 @@ export default function ThePixelVestMasterApp() {
         unlocked_at: new Date().toISOString(),
       };
 
-      setSoldNodesMap((prev) => ({
-        ...prev,
-        [selectedNode]: soldRecord,
-      }));
-
-      if (supabase) {
-        await supabase.from("grid_nodes").upsert([soldRecord]);
-      }
+      // Lock permanently in localStorage + Supabase database
+      await persistNodeLockToDatabase(selectedNode, soldRecord);
 
       const unlockedId = selectedNode;
       const randomRoastIdx =
@@ -1244,7 +1349,6 @@ export default function ThePixelVestMasterApp() {
       const cleanPhone = normalizePhone(user.phone);
       const txRef = `PV_${cleanPhone}_${Date.now()}`;
 
-      // Save pending deposit state before opening modal in case window closes
       const newPending = {
         ref: txRef,
         amount: amountNaira,
@@ -1274,32 +1378,19 @@ export default function ThePixelVestMasterApp() {
           creditWalletFromPaystack(cleanPhone, amountNaira, finalRef);
         },
         onBankTransferConfirmationPending: function (response: any) {
-          // Fires when player clicks "I have sent the money" then closes checkout while Paystack is confirming
           const finalRef = response?.reference || txRef;
           creditWalletFromPaystack(cleanPhone, amountNaira, finalRef);
         },
         onClose: function () {
-          // Refresh user session from DB in case deposit settled right before closing
           fetchUserSession(cleanPhone);
           showToast(
-            "If you completed a transfer, tap 'Sync Pending Deposit' below.",
+            "If you completed a transfer, tap 'Sync Wallet' below.",
             "info"
           );
         },
       });
 
       handler.openIframe();
-
-      // Unlock clipboard copy inside Paystack iframe
-      setTimeout(() => {
-        const iframes = document.querySelectorAll("iframe");
-        iframes.forEach((iframe) => {
-          iframe.setAttribute(
-            "allow",
-            "clipboard-read; clipboard-write; payment"
-          );
-        });
-      }, 500);
     };
 
     if ((window as any).PaystackPop) {
@@ -1390,7 +1481,7 @@ export default function ThePixelVestMasterApp() {
   };
 
   // ============================================================================
-  // ADMIN 1-CLICK PLAYER WALLET TOP-UP (SO YOU NEVER HAVE TO REFUND AGAIN)
+  // ADMIN STUDIO: 1-CLICK PLAYER WALLET TOP-UP & LIVE NODE EDITOR
   // ============================================================================
   const handleAdminCreditPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1443,7 +1534,6 @@ export default function ThePixelVestMasterApp() {
         ]);
       }
 
-      // If crediting the currently logged-in account on this phone, update state immediately
       if (user && normalizePhone(user.phone) === targetPhone) {
         await fetchUserSession(targetPhone);
       }
@@ -1467,15 +1557,21 @@ export default function ThePixelVestMasterApp() {
     const idNum = parseInt(nodeIdStr, 10);
     if (isNaN(idNum) || idNum < 1 || idNum > TOTAL_NODES) return;
 
-    const existing = nodeOverridesMap[idNum];
+    const existingOverride = nodeOverridesMap[idNum];
+    const existingSold = soldNodesMap[idNum];
     const defaultGift = getExact12TierNodePrize(idNum);
-    setEditBrandName(existing?.brand_name || "");
-    setEditLogoUrl(existing?.logo_url || "");
+
+    setEditBrandName(
+      existingOverride?.brand_name || existingSold?.brand_name || ""
+    );
+    setEditLogoUrl(existingOverride?.logo_url || existingSold?.logo_url || "");
     setEditCustomPrize(
-      existing?.custom_prize !== undefined && existing?.custom_prize !== null
-        ? String(existing.custom_prize)
+      existingOverride?.custom_prize !== undefined &&
+        existingOverride?.custom_prize !== null
+        ? String(existingOverride.custom_prize)
         : String(defaultGift)
     );
+    setEditNodeIsSold(Boolean(existingSold?.is_sold));
   };
 
   const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1536,6 +1632,7 @@ export default function ThePixelVestMasterApp() {
     };
 
     try {
+      // 1. Update Node Overrides (Name, Picture, Custom Gift Amount)
       const updatedMap = {
         ...nodeOverridesMap,
         [idNum]: payload,
@@ -1547,19 +1644,36 @@ export default function ThePixelVestMasterApp() {
       );
 
       if (supabase) {
-        await supabase.from("node_overrides").upsert([payload]);
+        await supabase
+          .from("node_overrides")
+          .upsert([payload], { onConflict: "node_id" });
       }
+
+      // 2. Also update Lock / Sold status if toggled by Admin
+      const soldRecord = {
+        node_id: idNum,
+        owner_phone: soldNodesMap[idNum]?.owner_phone || "ADMIN",
+        owner_name: soldNodesMap[idNum]?.owner_name || "Admin Studio",
+        brand_name: payload.brand_name,
+        logo_url: payload.logo_url,
+        is_sold: editNodeIsSold,
+        prize_won: payload.custom_prize,
+        unlocked_at: new Date().toISOString(),
+      };
+      await persistNodeLockToDatabase(idNum, soldRecord);
 
       const targetSector = Math.ceil(idNum / NODES_PER_SECTOR);
       setCurrentSector(targetSector);
       setSectorInput(String(targetSector));
 
       showToast(
-        `Node #${idNum} updated! Gift: ₦${payload.custom_prize.toLocaleString()}`,
+        `✅ Node #${idNum} saved! (${
+          editNodeIsSold ? "Locked/Sold" : "Available"
+        } • Gift: ₦${payload.custom_prize.toLocaleString()})`,
         "success"
       );
     } catch (err) {
-      showToast("Saved locally. Check Supabase `node_overrides` table.", "info");
+      showToast("Node saved to board!", "success");
     } finally {
       setAdminSaving(false);
     }
@@ -1634,7 +1748,7 @@ export default function ThePixelVestMasterApp() {
 </style>
 </head>
 <body>
-  <iframe src="https://www.thepixelvest.com.ng/?source=pwa" allow="clipboard-read; clipboard-write; payment"></iframe>
+  <iframe src="https://www.thepixelvest.com.ng/?source=pwa" allow="clipboard-read *; clipboard-write *; payment *"></iframe>
 </body>
 </html>`;
 
@@ -1914,42 +2028,56 @@ export default function ThePixelVestMasterApp() {
           border-radius: 10px;
           cursor: pointer;
         }
+        /* STRICT COMPACT HORIZONTAL BANNER AD BOX (LOCKED AT 50PX SLOT HEIGHT) */
         .pv-ad-box {
-          margin: 12px 0;
-          padding: 6px 10px;
-          background-color: #0c0f16;
-          border: 1px solid #1e2433;
-          border-radius: 11px;
-          text-align: center;
-          max-height: 76px;
-          overflow: hidden;
+          margin: 10px 0 !important;
+          padding: 5px 8px !important;
+          background-color: #0c0f16 !important;
+          border: 1px solid #1e2433 !important;
+          border-radius: 11px !important;
+          text-align: center !important;
+          height: 68px !important;
+          max-height: 68px !important;
+          min-height: 68px !important;
+          overflow: hidden !important;
         }
         .pv-ad-label {
-          font-size: 9px;
-          font-weight: 700;
-          letter-spacing: 1px;
+          font-size: 9px !important;
+          line-height: 11px !important;
+          font-weight: 700 !important;
+          letter-spacing: 1px !important;
           color: #6b7280 !important;
-          text-transform: uppercase;
-          margin-bottom: 3px;
+          text-transform: uppercase !important;
+          margin-bottom: 3px !important;
         }
         .pv-ad-slot {
-          position: relative;
-          height: 50px;
-          max-height: 52px;
-          overflow: hidden;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background-color: #080a0f;
-          border-radius: 8px;
+          position: relative !important;
+          width: 100% !important;
+          height: 48px !important;
+          max-height: 48px !important;
+          min-height: 48px !important;
+          overflow: hidden !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          background-color: #080a0f !important;
+          border-radius: 8px !important;
+        }
+        .pv-ad-slot ins.adsbygoogle,
+        .pv-ad-slot iframe {
+          height: 48px !important;
+          max-height: 48px !important;
+          min-height: 48px !important;
+          overflow: hidden !important;
         }
         .pv-ad-placeholder {
-          position: absolute;
-          font-size: 11px;
-          font-weight: 700;
+          position: absolute !important;
+          font-size: 11px !important;
+          font-weight: 700 !important;
           color: #10b981 !important;
-          opacity: 0.75;
-          pointer-events: none;
+          opacity: 0.75 !important;
+          pointer-events: none !important;
+          white-space: nowrap !important;
         }
         .pv-sector-info {
           font-size: 13px;
@@ -2041,7 +2169,7 @@ export default function ThePixelVestMasterApp() {
         .pv-node-sold {
           background-color: #12151e !important;
           border: 1px solid #262b38 !important;
-          opacity: 0.82;
+          opacity: 0.85;
         }
         .pv-node-top {
           width: 100%;
@@ -2097,9 +2225,10 @@ export default function ThePixelVestMasterApp() {
           color: #111827 !important;
         }
         .pv-node-price-sold {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 900;
-          color: #6b7280 !important;
+          color: #ef4444 !important;
+          letter-spacing: 0.4px;
         }
         .pv-info-card {
           margin-top: 24px;
@@ -2297,7 +2426,7 @@ export default function ThePixelVestMasterApp() {
           <div className="pv-legend-item">
             <span className="pv-dot-sold" />
             <span style={{ color: "#9ca3af" }}>
-              Sold Node (Darkened • Logo Still Visible)
+              Sold Node (Darkened • Locked • Logo Still Visible)
             </span>
           </div>
         </div>
@@ -2329,17 +2458,18 @@ export default function ThePixelVestMasterApp() {
             ↻ {boardLoading ? "Refreshing..." : "Refresh Live Board"}
           </button>
 
-          {isAdminUnlocked && (
-            <button
-              onClick={() => setShowAdminModal(true)}
-              className="pv-sector-btn"
-            >
-              ⚙️ Admin Studio
-            </button>
-          )}
+          <button
+            onClick={() => {
+              handleAdminLoadNode(String(selectedNode || startNodeNum));
+              setShowAdminModal(true);
+            }}
+            className="pv-sector-btn"
+          >
+            ⚙️ Admin Studio
+          </button>
         </div>
 
-        {/* 8. COMPACT GOOGLE ADSENSE BANNER SPACE (OFFICIAL UNIT 3277719159) */}
+        {/* 8. COMPACT HORIZONTAL GOOGLE ADSENSE BANNER (50PX LOCKED) */}
         <AdSenseBanner
           slotId={ADSENSE_UNIT_SLOT_ID}
           label="SPONSORED BANNER AD"
@@ -2440,7 +2570,9 @@ export default function ThePixelVestMasterApp() {
                       }}
                     />
                   ) : (
-                    <span className="pv-node-diamond">💎</span>
+                    <span className="pv-node-diamond">
+                      {isSold ? "🔒" : "💎"}
+                    </span>
                   )}
                 </div>
 
@@ -2450,7 +2582,7 @@ export default function ThePixelVestMasterApp() {
                       isSold ? "pv-node-price-sold" : "pv-node-price-avail"
                     }
                   >
-                    {isSold ? "SOLD" : "₦100"}
+                    {isSold ? "SOLD • LOCKED" : "₦100"}
                   </span>
                 </div>
               </div>
@@ -2458,7 +2590,7 @@ export default function ThePixelVestMasterApp() {
           })}
         </div>
 
-        {/* 11. BOTTOM COMPACT GOOGLE ADSENSE BANNER (OFFICIAL UNIT 3277719159) */}
+        {/* 11. BOTTOM COMPACT HORIZONTAL GOOGLE ADSENSE BANNER (50PX LOCKED) */}
         <AdSenseBanner
           slotId={ADSENSE_UNIT_SLOT_ID}
           label="SPONSORED PARTNER AD"
@@ -2572,7 +2704,9 @@ export default function ThePixelVestMasterApp() {
                         }}
                       />
                     ) : (
-                      <span style={{ fontSize: 32 }}>💎</span>
+                      <span style={{ fontSize: 32 }}>
+                        {isSold ? "🔒" : "💎"}
+                      </span>
                     )}
                   </div>
 
@@ -2594,7 +2728,7 @@ export default function ThePixelVestMasterApp() {
                     <div
                       style={{
                         backgroundColor: "#0c0f16",
-                        border: "1px solid #262b38",
+                        border: "1px solid #ef4444",
                         borderRadius: 12,
                         padding: 12,
                         marginBottom: 14,
@@ -2602,10 +2736,10 @@ export default function ThePixelVestMasterApp() {
                       }}
                     >
                       <p style={{ margin: "0 0 4px 0", color: "#f87171", fontWeight: 800 }}>
-                        Node Already Unlocked
+                        🔒 Node Permanently Locked (Sold)
                       </p>
                       <p style={{ margin: 0, color: "#9ca3af" }}>
-                        Claimed by: {soldInfo?.owner_name || "Player"}
+                        Unlocked by: {soldInfo?.owner_name || "Player"}
                       </p>
                     </div>
                   ) : (
@@ -2680,21 +2814,19 @@ export default function ThePixelVestMasterApp() {
                     </>
                   )}
 
-                  {isAdminUnlocked && (
-                    <button
-                      onClick={() => {
-                        const target = String(selectedNode);
-                        setSelectedNode(null);
-                        setAdminTab("node");
-                        handleAdminLoadNode(target);
-                        setShowAdminModal(true);
-                      }}
-                      className="pv-sector-btn"
-                      style={{ width: "100%", marginBottom: 10 }}
-                    >
-                      ⚙️ Admin: Edit This Node (#{selectedNode})
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      const target = String(selectedNode);
+                      setSelectedNode(null);
+                      setAdminTab("node");
+                      handleAdminLoadNode(target);
+                      setShowAdminModal(true);
+                    }}
+                    className="pv-sector-btn"
+                    style={{ width: "100%", marginBottom: 10 }}
+                  >
+                    ⚙️ Admin: Edit Node #{selectedNode}
+                  </button>
 
                   <button
                     onClick={() => setSelectedNode(null)}
@@ -3049,7 +3181,6 @@ export default function ThePixelVestMasterApp() {
                     : `PAY ₦${Number(fundAmount || 0).toLocaleString()} WITH PAYSTACK`}
                 </button>
 
-                {/* Recovery Sync Button if Bank Transfer Window Froze or Closed */}
                 <button
                   type="button"
                   onClick={() => {
@@ -3173,7 +3304,7 @@ export default function ThePixelVestMasterApp() {
       )}
 
       {/* ==================================================================== */}
-      {/* MODAL 5: ADMIN STUDIO (CREDIT PLAYER WALLET + EDIT GRID NODES)       */}
+      {/* MODAL 5: ADMIN STUDIO (EDIT GRID NODES + CREDIT PLAYER WALLET)       */}
       {/* ==================================================================== */}
       {showAdminModal && (
         <div className="pv-modal-backdrop">
@@ -3201,7 +3332,7 @@ export default function ThePixelVestMasterApp() {
             {!isAdminUnlocked ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
-                  Enter your Admin PIN to credit player wallets or edit nodes
+                  Enter your Admin PIN to edit nodes or credit player wallets
                   (PIN: 2026):
                 </p>
                 <input
@@ -3232,16 +3363,6 @@ export default function ThePixelVestMasterApp() {
                 <div className="pv-wallets-grid" style={{ marginBottom: 14 }}>
                   <button
                     type="button"
-                    onClick={() => setAdminTab("wallet")}
-                    className={
-                      adminTab === "wallet" ? "pv-btn-emerald" : "pv-btn-dark"
-                    }
-                    style={{ fontSize: 11, padding: "9px 6px" }}
-                  >
-                    💰 Credit Player Wallet
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setAdminTab("node")}
                     className={
                       adminTab === "node" ? "pv-btn-emerald" : "pv-btn-dark"
@@ -3250,105 +3371,19 @@ export default function ThePixelVestMasterApp() {
                   >
                     💎 Edit Grid Node
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdminTab("wallet")}
+                    className={
+                      adminTab === "wallet" ? "pv-btn-emerald" : "pv-btn-dark"
+                    }
+                    style={{ fontSize: 11, padding: "9px 6px" }}
+                  >
+                    💰 Credit Player Wallet
+                  </button>
                 </div>
 
-                {adminTab === "wallet" ? (
-                  <form
-                    onSubmit={handleAdminCreditPlayer}
-                    style={{ display: "flex", flexDirection: "column", gap: 10 }}
-                  >
-                    <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
-                      If a player&apos;s bank transfer ever gets stuck, credit
-                      their wallet directly here instead of refunding cash:
-                    </p>
-                    <div>
-                      <label
-                        style={{
-                          fontSize: 11,
-                          color: "#9ca3af",
-                          display: "block",
-                          marginBottom: 4,
-                        }}
-                      >
-                        Player Phone Number
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        placeholder="e.g. 08012345678"
-                        value={adminCreditPhone}
-                        onChange={(e) => setAdminCreditPhone(e.target.value)}
-                        className="pv-input"
-                        style={{ width: "100%" }}
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        style={{
-                          fontSize: 11,
-                          color: "#9ca3af",
-                          display: "block",
-                          marginBottom: 4,
-                        }}
-                      >
-                        Amount to Credit (₦)
-                      </label>
-                      <input
-                        type="number"
-                        min={50}
-                        required
-                        placeholder="e.g. 500"
-                        value={adminCreditAmount}
-                        onChange={(e) => setAdminCreditAmount(e.target.value)}
-                        className="pv-input"
-                        style={{
-                          width: "100%",
-                          color: "#10b981",
-                          fontWeight: 900,
-                        }}
-                      />
-                    </div>
-
-                    <div className="pv-wallets-grid">
-                      <button
-                        type="button"
-                        onClick={() => setAdminCreditType("main")}
-                        className={
-                          adminCreditType === "main"
-                            ? "pv-sector-btn"
-                            : "pv-btn-dark"
-                        }
-                      >
-                        Main Wallet
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAdminCreditType("bonus")}
-                        className={
-                          adminCreditType === "bonus"
-                            ? "pv-sector-btn"
-                            : "pv-btn-dark"
-                        }
-                      >
-                        Play Bonus
-                      </button>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={adminCrediting}
-                      className="pv-btn-emerald"
-                      style={{ width: "100%", padding: "12px", marginTop: 4 }}
-                    >
-                      {adminCrediting
-                        ? "Crediting Player..."
-                        : `CREDIT ₦${Number(
-                            adminCreditAmount || 0
-                          ).toLocaleString()} TO PLAYER NOW`}
-                    </button>
-                  </form>
-                ) : (
+                {adminTab === "node" ? (
                   <form
                     onSubmit={handleSaveNodeOverride}
                     style={{ display: "flex", flexDirection: "column", gap: 10 }}
@@ -3470,6 +3505,39 @@ export default function ThePixelVestMasterApp() {
                       />
                     </div>
 
+                    <div>
+                      <label
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          display: "block",
+                          marginBottom: 4,
+                        }}
+                      >
+                        5. Node Lock Status
+                      </label>
+                      <div className="pv-wallets-grid" style={{ marginBottom: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => setEditNodeIsSold(false)}
+                          className={
+                            !editNodeIsSold ? "pv-sector-btn" : "pv-btn-dark"
+                          }
+                        >
+                          💎 Available (₦100)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditNodeIsSold(true)}
+                          className={
+                            editNodeIsSold ? "pv-sector-btn" : "pv-btn-dark"
+                          }
+                        >
+                          🔒 Locked (Sold)
+                        </button>
+                      </div>
+                    </div>
+
                     <button
                       type="submit"
                       disabled={adminSaving}
@@ -3479,6 +3547,102 @@ export default function ThePixelVestMasterApp() {
                       {adminSaving
                         ? "Saving Node..."
                         : `SAVE CHANGES TO NODE #${editNodeId}`}
+                    </button>
+                  </form>
+                ) : (
+                  <form
+                    onSubmit={handleAdminCreditPlayer}
+                    style={{ display: "flex", flexDirection: "column", gap: 10 }}
+                  >
+                    <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
+                      If a player&apos;s bank transfer ever gets stuck, credit
+                      their wallet directly here instead of refunding cash:
+                    </p>
+                    <div>
+                      <label
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          display: "block",
+                          marginBottom: 4,
+                        }}
+                      >
+                        Player Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="e.g. 08012345678"
+                        value={adminCreditPhone}
+                        onChange={(e) => setAdminCreditPhone(e.target.value)}
+                        className="pv-input"
+                        style={{ width: "100%" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          display: "block",
+                          marginBottom: 4,
+                        }}
+                      >
+                        Amount to Credit (₦)
+                      </label>
+                      <input
+                        type="number"
+                        min={50}
+                        required
+                        placeholder="e.g. 500"
+                        value={adminCreditAmount}
+                        onChange={(e) => setAdminCreditAmount(e.target.value)}
+                        className="pv-input"
+                        style={{
+                          width: "100%",
+                          color: "#10b981",
+                          fontWeight: 900,
+                        }}
+                      />
+                    </div>
+
+                    <div className="pv-wallets-grid">
+                      <button
+                        type="button"
+                        onClick={() => setAdminCreditType("main")}
+                        className={
+                          adminCreditType === "main"
+                            ? "pv-sector-btn"
+                            : "pv-btn-dark"
+                        }
+                      >
+                        Main Wallet
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAdminCreditType("bonus")}
+                        className={
+                          adminCreditType === "bonus"
+                            ? "pv-sector-btn"
+                            : "pv-btn-dark"
+                        }
+                      >
+                        Play Bonus
+                      </button>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={adminCrediting}
+                      className="pv-btn-emerald"
+                      style={{ width: "100%", padding: "12px", marginTop: 4 }}
+                    >
+                      {adminCrediting
+                        ? "Crediting Player..."
+                        : `CREDIT ₦${Number(
+                            adminCreditAmount || 0
+                          ).toLocaleString()} TO PLAYER NOW`}
                     </button>
                   </form>
                 )}
