@@ -7,14 +7,11 @@ import { createClient } from "@supabase/supabase-js";
 // 0. GLOBAL INTERCEPTOR: PAYSTACK IFRAME CLIPBOARD PERMISSION & APK INSTALL
 // ============================================================================
 if (typeof window !== "undefined") {
-  // 1. Capture native Android WebAPK install prompt before React mounts
   window.addEventListener("beforeinstallprompt", (e: any) => {
     e.preventDefault();
     (window as any).__pvDeferredPrompt = e;
   });
 
-  // 2. Intercept iframe creation so Paystack's checkout iframe ALWAYS gets
-  // clipboard-write permission BEFORE it mounts into the DOM!
   const originalCreateElement = document.createElement.bind(document);
   if (!(window as any).__pvIframePatched) {
     (window as any).__pvIframePatched = true;
@@ -30,7 +27,6 @@ if (typeof window !== "undefined") {
     };
   }
 
-  // 3. Preload Paystack inline script immediately
   if (!document.getElementById("paystack-inline-js")) {
     const s = originalCreateElement("script");
     s.id = "paystack-inline-js";
@@ -50,14 +46,13 @@ const supabase =
     ? createClient(supabaseUrl, supabaseAnonKey)
     : null;
 
-// Hardcoded Live Paystack Public Key
 const PAYSTACK_PUBLIC_KEY = "pk_live_4f604b2d9d9689f50eba439e704600844f7dfd01";
 
-// Official Google AdSense Publisher & Ad Unit Slot IDs
 const ADSENSE_CLIENT_ID = "ca-pub-9204985294084444";
 const ADSENSE_UNIT_SLOT_ID = "3277719159";
 
-const ADMIN_MASTER_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN || "2026";
+// Updated Master Admin Password
+const ADMIN_MASTER_PIN = "Amophanty//:betty?";
 
 const TOTAL_NODES = 1000000;
 const NODES_PER_SECTOR = 100;
@@ -67,12 +62,81 @@ const REFERRAL_REWARD_AMOUNT = 50; // ₦50 credited once referred user plays wi
 
 const LIVE_TICKER_MESSAGES = [
   "💎 0901***552 unlocked ₦10,000 Mega Vault on Node #314!",
-  "💎 0803***119 unlocked ₦5,000 Super Vault on Node #500,012!",
+  "💎 0803***119 unlocked 5 Nodes & hit ₦5,000 Super Vault!",
   "💎 0706***884 unlocked ₦3,000 Gold Vault on Node #14,820!",
   "💎 0814***902 unlocked ₦1,000 Cash Vault on Node #204,115!",
   "💎 0905***337 earned ₦50 Referral Play Bonus from an active player!",
   "💎 0809***441 unlocked ₦10,000 Mega Vault on Node #882,009!",
 ];
+
+// ============================================================================
+// 1B. 10 POPULAR COMPANY LOGOS IN SECTOR #1 (NODES 1 - 100)
+// ============================================================================
+function makeBrandSvg(
+  bg: string,
+  fg: string,
+  text: string,
+  sub?: string
+): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+    <rect width="120" height="120" rx="22" fill="${bg}"/>
+    <text x="60" y="${sub ? "58" : "68"}" text-anchor="middle" fill="${fg}" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${
+    text.length > 6 ? "18" : "24"
+  }">${text}</text>
+    ${
+      sub
+        ? `<text x="60" y="84" text-anchor="middle" fill="${fg}" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="13" opacity="0.9">${sub}</text>`
+        : ""
+    }
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const DEFAULT_SECTOR_1_BRAND_NODES: Record<
+  number,
+  { brand_name: string; logo_url: string }
+> = {
+  7: {
+    brand_name: "MTN Nigeria",
+    logo_url: makeBrandSvg("#FFCC00", "#000000", "MTN", "5G VAULT"),
+  },
+  14: {
+    brand_name: "OPay Digital",
+    logo_url: makeBrandSvg("#00B875", "#FFFFFF", "OPay", "INSTANT"),
+  },
+  21: {
+    brand_name: "Paystack",
+    logo_url: makeBrandSvg("#011B33", "#00C3F7", "Paystack", "VERIFIED"),
+  },
+  28: {
+    brand_name: "Moniepoint",
+    logo_url: makeBrandSvg("#0357EE", "#FFFFFF", "MONIE", "POINT"),
+  },
+  35: {
+    brand_name: "Flutterwave",
+    logo_url: makeBrandSvg("#FB9129", "#111827", "FLW", "WAVE"),
+  },
+  42: {
+    brand_name: "PalmPay",
+    logo_url: makeBrandSvg("#6E3FF3", "#FFFFFF", "PalmPay", "REWARDS"),
+  },
+  55: {
+    brand_name: "GTCO Bank",
+    logo_url: makeBrandSvg("#E04F16", "#FFFFFF", "GTCO", "737 BOX"),
+  },
+  68: {
+    brand_name: "Dangote Group",
+    logo_url: makeBrandSvg("#102A71", "#FBBF24", "DANGOTE", "MEGA"),
+  },
+  77: {
+    brand_name: "Access More",
+    logo_url: makeBrandSvg("#F37021", "#FFFFFF", "ACCESS", "DIAMOND"),
+  },
+  95: {
+    brand_name: "Kuda Bank",
+    logo_url: makeBrandSvg("#40196D", "#34D399", "kuda.", "FREE VAULT"),
+  },
+};
 
 // ============================================================================
 // 2. ALL 250 NIGERIAN ROASTS, JOKES & HUSTLE QUOTES FOR EMPTY (₦0) NODES
@@ -390,7 +454,6 @@ function AdSenseBanner({
         <span className="pv-ad-placeholder">
           ⚡ Google AdSense • The Pixel Vest Partner Network
         </span>
-        {/* Pixel Vest Official Horizontal 320x50 Unit (Cannot Expand Vertically) */}
         <ins
           className="adsbygoogle"
           style={{
@@ -415,6 +478,7 @@ export default function ThePixelVestMasterApp() {
   const [currentSector, setCurrentSector] = useState<number>(1);
   const [sectorInput, setSectorInput] = useState<string>("1");
   const [searchNodeInput, setSearchNodeInput] = useState<string>("1");
+  const [highlightedNode, setHighlightedNode] = useState<number | null>(null);
 
   const [user, setUser] = useState<any>(null);
   const [deviceId, setDeviceId] = useState<string>("");
@@ -433,14 +497,14 @@ export default function ThePixelVestMasterApp() {
   );
   const [boardLoading, setBoardLoading] = useState<boolean>(false);
 
-  const [selectedNode, setSelectedNode] = useState<number | null>(null);
+  // MULTI-NODE SELECTION CART + SOLD NODE INSPECTOR
+  const [selectedNodes, setSelectedNodes] = useState<number[]>([]);
+  const [inspectSoldNode, setInspectSoldNode] = useState<number | null>(null);
   const [walletSource, setWalletSource] = useState<"main" | "bonus">("main");
   const [unlockLoading, setUnlockLoading] = useState<boolean>(false);
   const [rewardResult, setRewardResult] = useState<{
-    nodeId: number;
-    amount: number;
-    brandName: string;
-    logoUrl?: string;
+    nodesUnlocked: { nodeId: number; amount: number; brandName: string }[];
+    totalAmount: number;
     roastIndex: number;
   } | null>(null);
 
@@ -464,10 +528,12 @@ export default function ThePixelVestMasterApp() {
   const [withdrawPinInput, setWithdrawPinInput] = useState<string>("");
   const [withdrawLoading, setWithdrawLoading] = useState<boolean>(false);
 
-  // Admin Studio States (Node Editor + Instant Player Wallet Credit)
+  // Admin Studio States (Edit Node + Credit User + Cash Outs)
   const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(false);
   const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
-  const [adminTab, setAdminTab] = useState<"node" | "wallet">("node");
+  const [adminTab, setAdminTab] = useState<"node" | "wallet" | "withdrawals">(
+    "node"
+  );
   const [adminPinInput, setAdminPinInput] = useState<string>("");
   const [adminCreditPhone, setAdminCreditPhone] = useState<string>("");
   const [adminCreditAmount, setAdminCreditAmount] = useState<string>("500");
@@ -475,6 +541,9 @@ export default function ThePixelVestMasterApp() {
     "main"
   );
   const [adminCrediting, setAdminCrediting] = useState<boolean>(false);
+
+  const [withdrawalsList, setWithdrawalsList] = useState<any[]>([]);
+  const [loadingWithdrawals, setLoadingWithdrawals] = useState<boolean>(false);
 
   const [editNodeId, setEditNodeId] = useState<string>("1");
   const [editBrandName, setEditBrandName] = useState<string>("");
@@ -512,7 +581,6 @@ export default function ThePixelVestMasterApp() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // 1. Device Fingerprint
     let storedDevice = localStorage.getItem("pixelvest_device_lock");
     if (!storedDevice) {
       storedDevice =
@@ -524,7 +592,6 @@ export default function ThePixelVestMasterApp() {
     }
     setDeviceId(storedDevice);
 
-    // 2. Ensure Manifest & Service Worker are registered for native APK install
     if (!document.querySelector('link[rel="manifest"]')) {
       const link = document.createElement("link");
       link.rel = "manifest";
@@ -547,7 +614,6 @@ export default function ThePixelVestMasterApp() {
     };
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
 
-    // 3. Grant clipboard-write permission to all iframes
     const observer = new MutationObserver(() => {
       const iframes = document.querySelectorAll("iframe");
       iframes.forEach((iframe) => {
@@ -564,7 +630,6 @@ export default function ThePixelVestMasterApp() {
     });
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // 4. Referral Param (?ref=...) or Admin URL Param (?admin=1)
     const params = new URLSearchParams(window.location.search);
     const refParam = params.get("ref");
     if (refParam) {
@@ -580,7 +645,6 @@ export default function ThePixelVestMasterApp() {
       setShowAdminModal(true);
     }
 
-    // 5. Restore Pending Paystack Tx if any
     const savedPending = localStorage.getItem("pv_active_pending_tx");
     if (savedPending) {
       try {
@@ -588,7 +652,6 @@ export default function ThePixelVestMasterApp() {
       } catch (e) {}
     }
 
-    // 6. Restore Local Sold Nodes + Local Overrides + User Session
     const localSold = localStorage.getItem("pixelvest_sold_nodes");
     if (localSold) {
       try {
@@ -850,7 +913,6 @@ export default function ThePixelVestMasterApp() {
     nodeId: number,
     soldRecord: Record<string, any>
   ) => {
-    // Layer 1: LocalStorage immediate persistence
     setSoldNodesMap((prev) => {
       const next = { ...prev, [nodeId]: soldRecord };
       localStorage.setItem("pixelvest_sold_nodes", JSON.stringify(next));
@@ -859,7 +921,6 @@ export default function ThePixelVestMasterApp() {
 
     if (!supabase) return;
 
-    // Layer 2: Save to `grid_nodes` with progressive column fallback so missing columns never block locking
     try {
       const { error: err1 } = await supabase
         .from("grid_nodes")
@@ -877,7 +938,6 @@ export default function ThePixelVestMasterApp() {
           .upsert([minimalSold], { onConflict: "node_id" });
 
         if (err2) {
-          // Try update first, then insert if row doesn't exist
           const { data: existingRow } = await supabase
             .from("grid_nodes")
             .select("node_id")
@@ -892,7 +952,9 @@ export default function ThePixelVestMasterApp() {
           } else {
             await supabase
               .from("grid_nodes")
-              .insert([{ node_id: nodeId, is_sold: Boolean(soldRecord.is_sold) }]);
+              .insert([
+                { node_id: nodeId, is_sold: Boolean(soldRecord.is_sold) },
+              ]);
           }
         }
       }
@@ -1160,90 +1222,173 @@ export default function ThePixelVestMasterApp() {
   };
 
   // ============================================================================
-  // UNLOCK NODE & LOCK IT PERMANENTLY IN DATABASE + LOCAL CACHE
+  // TOGGLE NODE IN MULTI-SELECT CART (OR INSPECT IF SOLD)
   // ============================================================================
-  const handleUnlockNode = async () => {
-    if (!selectedNode) return;
+  const handleNodeCardClick = (nodeId: number) => {
+    const isSold = Boolean(soldNodesMap[nodeId]?.is_sold);
+    if (isSold) {
+      setInspectSoldNode(nodeId);
+      return;
+    }
+
+    setSelectedNodes((prev) => {
+      if (prev.includes(nodeId)) {
+        return prev.filter((id) => id !== nodeId);
+      } else {
+        return [...prev, nodeId];
+      }
+    });
+  };
+
+  // ============================================================================
+  // BATCH UNLOCK MULTIPLE SELECTED NODES AT ONCE
+  // ============================================================================
+  const handleUnlockSelectedNodes = async () => {
+    const activeNodes = selectedNodes.filter(
+      (id) => !soldNodesMap[id]?.is_sold
+    );
+
+    if (activeNodes.length === 0) {
+      showToast("Please tap one or more available Golden Nodes first!", "info");
+      return;
+    }
+
     if (!user) {
-      setSelectedNode(null);
       setShowAuthModal(true);
       return;
     }
 
+    const totalCost = activeNodes.length * NODE_PRICE;
     const mainBal = getMainBalance(user);
     const bonusBal = getBonusBalance(user);
 
-    if (walletSource === "main" && mainBal < NODE_PRICE) {
+    if (walletSource === "main" && mainBal < totalCost) {
       showToast(
-        "Insufficient Main Wallet balance (₦100 needed). Fund via Paystack first!",
+        `Insufficient Main Wallet (₦${totalCost.toLocaleString()} needed for ${
+          activeNodes.length
+        } node${activeNodes.length > 1 ? "s" : ""}). Fund via Paystack!`,
         "error"
       );
-      setSelectedNode(null);
+      setFundAmount(String(Math.max(500, totalCost)));
       setWalletTab("fund");
       setShowWalletModal(true);
       return;
     }
 
-    if (walletSource === "bonus" && bonusBal < NODE_PRICE) {
+    if (walletSource === "bonus" && bonusBal < totalCost) {
       showToast(
-        "Insufficient Play Bonus balance (₦100 needed). Switch to Main Wallet!",
+        `Insufficient Play Bonus (₦${totalCost.toLocaleString()} needed). Switch to Main Wallet!`,
         "error"
       );
-      return;
-    }
-
-    if (soldNodesMap[selectedNode]?.is_sold) {
-      showToast("This Node has already been unlocked and locked!", "error");
       return;
     }
 
     setUnlockLoading(true);
 
     try {
-      // Double-check live database before unlocking so two players can't tap the same node
+      // Live check in Supabase to ensure none of the selected nodes were just taken
+      let validNodesToUnlock = [...activeNodes];
       if (supabase) {
-        const { data: liveCheck } = await supabase
+        const { data: liveSoldRows } = await supabase
           .from("grid_nodes")
           .select("*")
-          .eq("node_id", selectedNode)
-          .maybeSingle();
+          .in("node_id", activeNodes);
 
-        if (liveCheck && liveCheck.is_sold) {
-          setSoldNodesMap((prev) => ({
-            ...prev,
-            [selectedNode]: liveCheck,
-          }));
-          showToast(
-            "Someone else just unlocked this Node! Pick another one.",
-            "error"
-          );
-          setUnlockLoading(false);
-          return;
+        if (liveSoldRows && liveSoldRows.length > 0) {
+          const alreadySoldIds = new Set<number>();
+          liveSoldRows.forEach((r: any) => {
+            if (r.is_sold) {
+              alreadySoldIds.add(Number(r.node_id));
+            }
+          });
+
+          if (alreadySoldIds.size > 0) {
+            setSoldNodesMap((prev) => {
+              const next = { ...prev };
+              liveSoldRows.forEach((r: any) => {
+                if (r.is_sold) next[Number(r.node_id)] = r;
+              });
+              return next;
+            });
+            validNodesToUnlock = activeNodes.filter(
+              (id) => !alreadySoldIds.has(id)
+            );
+            setSelectedNodes(validNodesToUnlock);
+
+            if (validNodesToUnlock.length === 0) {
+              showToast(
+                "Selected node(s) were just unlocked by another player!",
+                "error"
+              );
+              setUnlockLoading(false);
+              return;
+            }
+          }
         }
       }
 
-      const customOverride = nodeOverridesMap[selectedNode];
-      const hasCustomPrize =
-        customOverride &&
-        customOverride.custom_prize !== undefined &&
-        customOverride.custom_prize !== null &&
-        customOverride.custom_prize !== "";
+      const finalCost = validNodesToUnlock.length * NODE_PRICE;
+      const cleanUserPhone = normalizePhone(String(user.phone));
 
-      const prizeWon = hasCustomPrize
-        ? Number(customOverride.custom_prize)
-        : getExact12TierNodePrize(selectedNode);
+      let totalPrizeWon = 0;
+      const unlockedBreakdown: {
+        nodeId: number;
+        amount: number;
+        brandName: string;
+      }[] = [];
+
+      for (const nodeId of validNodesToUnlock) {
+        const customOverride = nodeOverridesMap[nodeId];
+        const defaultBrand = DEFAULT_SECTOR_1_BRAND_NODES[nodeId];
+        const hasCustomPrize =
+          customOverride &&
+          customOverride.custom_prize !== undefined &&
+          customOverride.custom_prize !== null &&
+          customOverride.custom_prize !== "";
+
+        const prizeWon = hasCustomPrize
+          ? Number(customOverride.custom_prize)
+          : getExact12TierNodePrize(nodeId);
+
+        totalPrizeWon += prizeWon;
+
+        const brandTitle =
+          customOverride?.brand_name ||
+          defaultBrand?.brand_name ||
+          `Golden Node #${nodeId}`;
+        const brandLogo =
+          customOverride?.logo_url || defaultBrand?.logo_url || null;
+
+        unlockedBreakdown.push({
+          nodeId,
+          amount: prizeWon,
+          brandName: brandTitle,
+        });
+
+        const soldRecord = {
+          node_id: nodeId,
+          owner_phone: cleanUserPhone,
+          owner_name: user.full_name || cleanUserPhone,
+          brand_name: brandTitle,
+          logo_url: brandLogo,
+          is_sold: true,
+          prize_won: prizeWon,
+          unlocked_at: new Date().toISOString(),
+        };
+
+        await persistNodeLockToDatabase(nodeId, soldRecord);
+      }
 
       const updatedMain =
         walletSource === "main"
-          ? mainBal - NODE_PRICE + prizeWon
-          : mainBal + prizeWon;
+          ? mainBal - finalCost + totalPrizeWon
+          : mainBal + totalPrizeWon;
       const updatedBonus =
-        walletSource === "bonus" ? bonusBal - NODE_PRICE : bonusBal;
+        walletSource === "bonus" ? bonusBal - finalCost : bonusBal;
 
       const referrerPhone = user.referred_by
         ? normalizePhone(String(user.referred_by))
         : null;
-      const cleanUserPhone = normalizePhone(String(user.phone));
       const alreadyRewarded =
         Boolean(user.referral_rewarded) ||
         localStorage.getItem(`pv_ref_paid_${cleanUserPhone}`) === "true";
@@ -1284,36 +1429,19 @@ export default function ThePixelVestMasterApp() {
         }
       }
 
-      const soldRecord = {
-        node_id: selectedNode,
-        owner_phone: cleanUserPhone,
-        owner_name: user.full_name || cleanUserPhone,
-        brand_name: customOverride?.brand_name || null,
-        logo_url: customOverride?.logo_url || null,
-        is_sold: true,
-        prize_won: prizeWon,
-        unlocked_at: new Date().toISOString(),
-      };
-
-      // Lock permanently in localStorage + Supabase database
-      await persistNodeLockToDatabase(selectedNode, soldRecord);
-
-      const unlockedId = selectedNode;
       const randomRoastIdx =
-        (unlockedId + Math.floor(Math.random() * 250)) %
+        (validNodesToUnlock[0] + Math.floor(Math.random() * 250)) %
         EMPTY_NODE_ROASTS_AND_QUOTES.length;
 
-      setSelectedNode(null);
+      setSelectedNodes([]);
       setRewardResult({
-        nodeId: unlockedId,
-        amount: prizeWon,
-        brandName: customOverride?.brand_name || `Golden Node #${unlockedId}`,
-        logoUrl: customOverride?.logo_url,
+        nodesUnlocked: unlockedBreakdown,
+        totalAmount: totalPrizeWon,
         roastIndex: randomRoastIdx,
       });
     } catch (err) {
-      console.error("Unlock node error:", err);
-      showToast("Error unlocking node. Please try again.", "error");
+      console.error("Batch unlock error:", err);
+      showToast("Error unlocking nodes. Please try again.", "error");
     } finally {
       setUnlockLoading(false);
     }
@@ -1481,8 +1609,38 @@ export default function ThePixelVestMasterApp() {
   };
 
   // ============================================================================
-  // ADMIN STUDIO: 1-CLICK PLAYER WALLET TOP-UP & LIVE NODE EDITOR
+  // ADMIN STUDIO: 1-CLICK PLAYER WALLET TOP-UP, NODE EDITOR & CASH OUTS
   // ============================================================================
+  const fetchAdminWithdrawals = async () => {
+    if (!supabase) return;
+    setLoadingWithdrawals(true);
+    try {
+      const { data } = await supabase
+        .from("withdrawals")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (data) setWithdrawalsList(data);
+    } catch (e) {}
+    setLoadingWithdrawals(false);
+  };
+
+  const markWithdrawalPaid = async (row: any) => {
+    if (!supabase) return;
+    const matchKey = row.id
+      ? { id: row.id }
+      : { user_phone: row.user_phone, amount: row.amount };
+    await supabase
+      .from("withdrawals")
+      .update({ status: "paid" })
+      .match(matchKey);
+    showToast(
+      `Marked ₦${Number(row.amount || 0).toLocaleString()} as PAID!`,
+      "success"
+    );
+    fetchAdminWithdrawals();
+  };
+
   const handleAdminCreditPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
     const targetPhone = normalizePhone(adminCreditPhone);
@@ -1559,12 +1717,21 @@ export default function ThePixelVestMasterApp() {
 
     const existingOverride = nodeOverridesMap[idNum];
     const existingSold = soldNodesMap[idNum];
+    const defaultBrand = DEFAULT_SECTOR_1_BRAND_NODES[idNum];
     const defaultGift = getExact12TierNodePrize(idNum);
 
     setEditBrandName(
-      existingOverride?.brand_name || existingSold?.brand_name || ""
+      existingOverride?.brand_name ||
+        existingSold?.brand_name ||
+        defaultBrand?.brand_name ||
+        ""
     );
-    setEditLogoUrl(existingOverride?.logo_url || existingSold?.logo_url || "");
+    setEditLogoUrl(
+      existingOverride?.logo_url ||
+        existingSold?.logo_url ||
+        defaultBrand?.logo_url ||
+        ""
+    );
     setEditCustomPrize(
       existingOverride?.custom_prize !== undefined &&
         existingOverride?.custom_prize !== null
@@ -1632,7 +1799,6 @@ export default function ThePixelVestMasterApp() {
     };
 
     try {
-      // 1. Update Node Overrides (Name, Picture, Custom Gift Amount)
       const updatedMap = {
         ...nodeOverridesMap,
         [idNum]: payload,
@@ -1649,7 +1815,6 @@ export default function ThePixelVestMasterApp() {
           .upsert([payload], { onConflict: "node_id" });
       }
 
-      // 2. Also update Lock / Sold status if toggled by Admin
       const soldRecord = {
         node_id: idNum,
         owner_phone: soldNodesMap[idNum]?.owner_phone || "ADMIN",
@@ -1686,15 +1851,46 @@ export default function ThePixelVestMasterApp() {
     fetchSectorBoardData(clamped);
   };
 
+  // ============================================================================
+  // SEARCH NODE -> JUMP TO PAGE, SMOOTH SCROLL, HIGHLIGHT & ADD TO SELECTION
+  // ============================================================================
   const handleJumpToNode = () => {
     const cleanNum = parseInt(searchNodeInput.replace(/,/g, ""), 10);
     if (isNaN(cleanNum) || cleanNum < 1 || cleanNum > TOTAL_NODES) {
       showToast("Enter a Node number between 1 and 1,000,000", "error");
       return;
     }
+
     const targetSec = Math.ceil(cleanNum / NODES_PER_SECTOR);
     changeSector(targetSec);
-    setSelectedNode(cleanNum);
+    setHighlightedNode(cleanNum);
+
+    // If the searched node is available, automatically add it to selection so user can select more & checkout!
+    if (!soldNodesMap[cleanNum]?.is_sold) {
+      setSelectedNodes((prev) =>
+        prev.includes(cleanNum) ? prev : [...prev, cleanNum]
+      );
+      showToast(
+        `Node #${cleanNum.toLocaleString()} highlighted & selected! Tap more nodes or checkout below.`,
+        "success"
+      );
+    } else {
+      showToast(
+        `Jumped to Node #${cleanNum.toLocaleString()} (Already Sold/Locked).`,
+        "info"
+      );
+    }
+
+    setTimeout(() => {
+      const el = document.getElementById(`pv-node-${cleanNum}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 180);
+
+    setTimeout(() => {
+      setHighlightedNode((prev) => (prev === cleanNum ? null : prev));
+    }, 7000);
   };
 
   // ============================================================================
@@ -1806,7 +2002,7 @@ export default function ThePixelVestMasterApp() {
         .pv-container {
           max-width: 440px;
           margin: 0 auto;
-          padding: 12px 14px 80px 14px;
+          padding: 12px 14px 190px 14px;
         }
         .pv-ticker {
           background-color: #082016;
@@ -1960,13 +2156,13 @@ export default function ThePixelVestMasterApp() {
         }
         .pv-legend {
           margin-bottom: 12px;
-          font-size: 13px;
+          font-size: 12px;
         }
         .pv-legend-item {
           display: flex;
           align-items: center;
           gap: 8px;
-          margin-bottom: 6px;
+          margin-bottom: 5px;
         }
         .pv-dot-gold {
           width: 14px;
@@ -1974,6 +2170,15 @@ export default function ThePixelVestMasterApp() {
           border-radius: 4px;
           background: linear-gradient(135deg, #fde047, #d97706);
           border: 1px solid #fef08a;
+          display: inline-block;
+          flex-shrink: 0;
+        }
+        .pv-dot-selected {
+          width: 14px;
+          height: 14px;
+          border-radius: 4px;
+          background: linear-gradient(135deg, #34d399, #059669);
+          border: 2px solid #ffffff;
           display: inline-block;
           flex-shrink: 0;
         }
@@ -2149,14 +2354,15 @@ export default function ThePixelVestMasterApp() {
           aspect-ratio: 1 / 1;
           min-height: 108px;
           border-radius: 15px;
-          padding: 10px;
+          padding: 9px;
           display: flex;
           flex-direction: column;
           justify-content: space-between;
           align-items: center;
           cursor: pointer;
-          transition: transform 0.12s ease;
+          transition: transform 0.14s ease, box-shadow 0.14s ease;
           user-select: none;
+          position: relative;
         }
         .pv-node-card:active {
           transform: scale(0.95);
@@ -2165,6 +2371,26 @@ export default function ThePixelVestMasterApp() {
           background: linear-gradient(180deg, #fcd34d 0%, #f59e0b 55%, #d97706 100%) !important;
           border: 1px solid #fef08a !important;
           box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+        }
+        .pv-node-selected {
+          background: linear-gradient(180deg, #34d399 0%, #10b981 55%, #059669 100%) !important;
+          border: 2.5px solid #ffffff !important;
+          box-shadow: 0 0 18px rgba(16, 185, 129, 0.75) !important;
+          transform: translateY(-2px);
+        }
+        @keyframes pvPulseGlow {
+          0%, 100% {
+            box-shadow: 0 0 0 3px #00f2fe, 0 0 24px #10b981;
+            transform: scale(1.03);
+          }
+          50% {
+            box-shadow: 0 0 0 6px #fbbf24, 0 0 32px #fbbf24;
+            transform: scale(0.98);
+          }
+        }
+        .pv-node-highlighted {
+          animation: pvPulseGlow 1.1s infinite ease-in-out !important;
+          z-index: 5;
         }
         .pv-node-sold {
           background-color: #12151e !important;
@@ -2176,15 +2402,15 @@ export default function ThePixelVestMasterApp() {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
-          gap: 4px;
+          gap: 3px;
         }
         .pv-node-num-avail {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 900;
           color: #111827 !important;
         }
         .pv-node-num-sold {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 900;
           color: #9ca3af !important;
         }
@@ -2193,9 +2419,9 @@ export default function ThePixelVestMasterApp() {
           font-weight: 800;
           padding: 2px 4px;
           border-radius: 4px;
-          background-color: rgba(0, 0, 0, 0.28);
+          background-color: rgba(0, 0, 0, 0.42);
           color: #ffffff !important;
-          max-width: 50px;
+          max-width: 58px;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
@@ -2212,23 +2438,51 @@ export default function ThePixelVestMasterApp() {
           filter: drop-shadow(0 2px 3px rgba(0,0,0,0.25));
         }
         .pv-node-logo {
-          width: 38px;
-          height: 38px;
-          border-radius: 8px;
+          width: 42px;
+          height: 42px;
+          border-radius: 10px;
           object-fit: contain;
           background-color: #ffffff;
           padding: 2px;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
         }
         .pv-node-price-avail {
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 900;
           color: #111827 !important;
         }
-        .pv-node-price-sold {
+        .pv-node-price-selected {
           font-size: 11px;
+          font-weight: 900;
+          color: #052e16 !important;
+          background-color: rgba(255,255,255,0.85);
+          padding: 2px 6px;
+          border-radius: 5px;
+        }
+        .pv-node-price-sold {
+          font-size: 10px;
           font-weight: 900;
           color: #ef4444 !important;
           letter-spacing: 0.4px;
+        }
+        /* FLOATING MULTI-NODE CART CHECKOUT BAR */
+        .pv-cart-bar {
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          z-index: 9500;
+          background: linear-gradient(180deg, #0d131d 0%, #070a10 100%);
+          border-top: 2px solid #10b981;
+          box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.85);
+          padding: 10px 14px 14px 14px;
+        }
+        .pv-cart-inner {
+          max-width: 440px;
+          margin: 0 auto;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
         }
         .pv-info-card {
           margin-top: 24px;
@@ -2349,7 +2603,8 @@ export default function ThePixelVestMasterApp() {
 
         {/* 3. SUBTITLE */}
         <p className="pv-subtitle">
-          1,000,000 Nodes • ₦22,000,000 Prize Vault • Tap a Golden Node (₦100)
+          1,000,000 Nodes • ₦22,000,000 Prize Vault • Tap 1 or More Nodes (₦100
+          each)
         </p>
 
         {/* 4. TWO WALLET BALANCES SIDE-BY-SIDE */}
@@ -2415,12 +2670,18 @@ export default function ThePixelVestMasterApp() {
 
         <hr className="pv-divider" />
 
-        {/* 6. AVAILABLE & SOLD NODE LEGEND */}
+        {/* 6. AVAILABLE, SELECTED & SOLD NODE LEGEND */}
         <div className="pv-legend">
           <div className="pv-legend-item">
             <span className="pv-dot-gold" />
             <span style={{ color: "#ffffff", fontWeight: 700 }}>
-              Available Node (₦100)
+              Available Node (Tap to Select • ₦100)
+            </span>
+          </div>
+          <div className="pv-legend-item">
+            <span className="pv-dot-selected" />
+            <span style={{ color: "#34d399", fontWeight: 700 }}>
+              Selected in Your Cart (Tap Multiple to Unlock Together!)
             </span>
           </div>
           <div className="pv-legend-item">
@@ -2431,7 +2692,7 @@ export default function ThePixelVestMasterApp() {
           </div>
         </div>
 
-        {/* 7. NODE SEARCH INPUT + GO + REFRESH LIVE BOARD */}
+        {/* 7. NODE SEARCH INPUT + GO (SCROLLS & HIGHLIGHTS NODE ON PAGE) */}
         <div className="pv-search-row">
           <input
             type="number"
@@ -2439,7 +2700,7 @@ export default function ThePixelVestMasterApp() {
             max={1000000}
             value={searchNodeInput}
             onChange={(e) => setSearchNodeInput(e.target.value)}
-            placeholder="Enter Node # (1 - 1,000,000)"
+            placeholder="Search Node # (1 - 1,000,000)"
             className="pv-input"
           />
           <button onClick={handleJumpToNode} className="pv-btn-go">
@@ -2460,7 +2721,9 @@ export default function ThePixelVestMasterApp() {
 
           <button
             onClick={() => {
-              handleAdminLoadNode(String(selectedNode || startNodeNum));
+              const targetNode =
+                selectedNodes[0] || highlightedNode || startNodeNum;
+              handleAdminLoadNode(String(targetNode));
               setShowAdminModal(true);
             }}
             className="pv-sector-btn"
@@ -2528,22 +2791,37 @@ export default function ThePixelVestMasterApp() {
           </div>
         </div>
 
-        {/* 10. EXACT 3-COLUMN GOLDEN DIAMOND GRID */}
+        {/* 10. EXACT 3-COLUMN GOLDEN DIAMOND GRID (WITH 10 BRAND LOGOS IN SECTOR 1) */}
         <div className="pv-grid">
           {sectorNodes.map((nodeId) => {
             const soldInfo = soldNodesMap[nodeId];
             const isSold = Boolean(soldInfo?.is_sold);
+            const isSelected = selectedNodes.includes(nodeId);
+            const isHighlighted = highlightedNode === nodeId;
+
             const override = nodeOverridesMap[nodeId];
-            const displayBrand = override?.brand_name || soldInfo?.brand_name;
-            const displayLogo = override?.logo_url || soldInfo?.logo_url;
+            const defaultBrand = DEFAULT_SECTOR_1_BRAND_NODES[nodeId];
+            const displayBrand =
+              override?.brand_name ||
+              soldInfo?.brand_name ||
+              defaultBrand?.brand_name;
+            const displayLogo =
+              override?.logo_url ||
+              soldInfo?.logo_url ||
+              defaultBrand?.logo_url;
 
             return (
               <div
+                id={`pv-node-${nodeId}`}
                 key={nodeId}
-                onClick={() => setSelectedNode(nodeId)}
+                onClick={() => handleNodeCardClick(nodeId)}
                 className={`pv-node-card ${
-                  isSold ? "pv-node-sold" : "pv-node-available"
-                }`}
+                  isSold
+                    ? "pv-node-sold"
+                    : isSelected
+                    ? "pv-node-selected"
+                    : "pv-node-available"
+                } ${isHighlighted ? "pv-node-highlighted" : ""}`}
               >
                 <div className="pv-node-top">
                   <span
@@ -2571,7 +2849,7 @@ export default function ThePixelVestMasterApp() {
                     />
                   ) : (
                     <span className="pv-node-diamond">
-                      {isSold ? "🔒" : "💎"}
+                      {isSold ? "🔒" : isSelected ? "✅" : "💎"}
                     </span>
                   )}
                 </div>
@@ -2579,10 +2857,18 @@ export default function ThePixelVestMasterApp() {
                 <div>
                   <span
                     className={
-                      isSold ? "pv-node-price-sold" : "pv-node-price-avail"
+                      isSold
+                        ? "pv-node-price-sold"
+                        : isSelected
+                        ? "pv-node-price-selected"
+                        : "pv-node-price-avail"
                     }
                   >
-                    {isSold ? "SOLD • LOCKED" : "₦100"}
+                    {isSold
+                      ? "SOLD • LOCKED"
+                      : isSelected
+                      ? "✓ SELECTED"
+                      : "₦100"}
                   </span>
                 </div>
               </div>
@@ -2602,9 +2888,9 @@ export default function ThePixelVestMasterApp() {
             The Pixel Vest — Nigeria&apos;s 1,000,000 Digital Node Grid
           </h2>
           <p style={{ margin: "0 0 8px 0" }}>
-            Unlock exclusive digital nodes for ₦100, display custom brand logos,
-            and discover instant cash vault bounties ranging from ₦10 up to
-            ₦10,000 across 10,000 sectors.
+            Select single or multiple digital nodes for ₦100 each, explore
+            featured brand vaults in Sector #1, and unlock instant cash vault
+            bounties ranging from ₦10 up to ₦10,000 across 10,000 sectors.
           </p>
           <p style={{ margin: 0 }}>
             <strong style={{ color: "#fbbf24" }}>
@@ -2647,7 +2933,9 @@ export default function ThePixelVestMasterApp() {
             </button>
             <button
               onClick={() => {
-                handleAdminLoadNode(String(selectedNode || startNodeNum));
+                const targetNode =
+                  selectedNodes[0] || highlightedNode || startNodeNum;
+                handleAdminLoadNode(String(targetNode));
                 setShowAdminModal(true);
               }}
               className="pv-link-btn"
@@ -2660,20 +2948,158 @@ export default function ThePixelVestMasterApp() {
       </div>
 
       {/* ==================================================================== */}
-      {/* MODAL 1: UNLOCK NODE MODAL                                           */}
+      {/* FLOATING MULTI-NODE SELECTION & BATCH CHECKOUT BAR                   */}
       {/* ==================================================================== */}
-      {selectedNode !== null && (
+      {selectedNodes.length > 0 && (
+        <div className="pv-cart-bar">
+          <div className="pv-cart-inner">
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#ffffff" }}>
+                <span style={{ color: "#10b981" }}>
+                  {selectedNodes.length} Node
+                  {selectedNodes.length > 1 ? "s" : ""} Selected
+                </span>{" "}
+                • Total:{" "}
+                <span style={{ color: "#fbbf24", fontWeight: 900 }}>
+                  ₦{(selectedNodes.length * NODE_PRICE).toLocaleString()}
+                </span>
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "#9ca3af",
+                    maxWidth: 250,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    marginTop: 2,
+                  }}
+                >
+                  Nodes: {selectedNodes.map((n) => `#${n}`).join(", ")}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 6 }}>
+                {isAdminUnlocked && selectedNodes.length === 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleAdminLoadNode(String(selectedNodes[0]));
+                      setAdminTab("node");
+                      setShowAdminModal(true);
+                    }}
+                    className="pv-sector-btn"
+                    style={{ padding: "6px 9px", fontSize: 10 }}
+                  >
+                    ⚙️ Edit #{selectedNodes[0]}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedNodes([])}
+                  className="pv-btn-dark"
+                  style={{ padding: "6px 10px", fontSize: 11 }}
+                >
+                  Clear ✕
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <button
+                type="button"
+                onClick={() => setWalletSource("main")}
+                style={{
+                  flex: 1,
+                  padding: "7px 8px",
+                  borderRadius: 9,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  backgroundColor:
+                    walletSource === "main" ? "#08291e" : "#12151e",
+                  color: walletSource === "main" ? "#10b981" : "#9ca3af",
+                  border:
+                    walletSource === "main"
+                      ? "1.5px solid #10b981"
+                      : "1px solid #262b38",
+                }}
+              >
+                Main: ₦{getMainBalance(user).toLocaleString()}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setWalletSource("bonus")}
+                style={{
+                  flex: 1,
+                  padding: "7px 8px",
+                  borderRadius: 9,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  backgroundColor:
+                    walletSource === "bonus" ? "#291d08" : "#12151e",
+                  color: walletSource === "bonus" ? "#fbbf24" : "#9ca3af",
+                  border:
+                    walletSource === "bonus"
+                      ? "1.5px solid #fbbf24"
+                      : "1px solid #262b38",
+                }}
+              >
+                Bonus: ₦{getBonusBalance(user).toLocaleString()}
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleUnlockSelectedNodes}
+              disabled={unlockLoading}
+              className="pv-btn-emerald"
+              style={{
+                width: "100%",
+                backgroundColor: "#fbbf24",
+                padding: "12px",
+                fontSize: 13,
+              }}
+            >
+              {unlockLoading
+                ? `Unlocking ${selectedNodes.length} Node(s)...`
+                : `🔓 UNLOCK ${selectedNodes.length} SELECTED NODE${
+                    selectedNodes.length > 1 ? "S" : ""
+                  } NOW (₦${(
+                    selectedNodes.length * NODE_PRICE
+                  ).toLocaleString()})`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* MODAL 1: SOLD NODE INSPECTOR MODAL                                   */}
+      {/* ==================================================================== */}
+      {inspectSoldNode !== null && (
         <div className="pv-modal-backdrop">
           <div className="pv-modal-card" style={{ textAlign: "center" }}>
             {(() => {
-              const soldInfo = soldNodesMap[selectedNode];
-              const isSold = Boolean(soldInfo?.is_sold);
-              const override = nodeOverridesMap[selectedNode];
+              const soldInfo = soldNodesMap[inspectSoldNode];
+              const override = nodeOverridesMap[inspectSoldNode];
+              const defaultBrand = DEFAULT_SECTOR_1_BRAND_NODES[inspectSoldNode];
               const displayBrand =
                 override?.brand_name ||
                 soldInfo?.brand_name ||
+                defaultBrand?.brand_name ||
                 "Golden Vault Node";
-              const displayLogo = override?.logo_url || soldInfo?.logo_url;
+              const displayLogo =
+                override?.logo_url ||
+                soldInfo?.logo_url ||
+                defaultBrand?.logo_url;
 
               return (
                 <>
@@ -2683,8 +3109,8 @@ export default function ThePixelVestMasterApp() {
                       height: 64,
                       margin: "0 auto 12px auto",
                       borderRadius: 16,
-                      backgroundColor: "rgba(245, 158, 11, 0.15)",
-                      border: "1px solid rgba(245, 158, 11, 0.45)",
+                      backgroundColor: "rgba(239, 68, 68, 0.15)",
+                      border: "1px solid rgba(239, 68, 68, 0.45)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -2704,14 +3130,12 @@ export default function ThePixelVestMasterApp() {
                         }}
                       />
                     ) : (
-                      <span style={{ fontSize: 32 }}>
-                        {isSold ? "🔒" : "💎"}
-                      </span>
+                      <span style={{ fontSize: 32 }}>🔒</span>
                     )}
                   </div>
 
                   <h3 style={{ margin: "0 0 4px 0", fontSize: 19, fontWeight: 900 }}>
-                    Node #{selectedNode.toLocaleString()}
+                    Node #{inspectSoldNode.toLocaleString()}
                   </h3>
                   <p
                     style={{
@@ -2724,112 +3148,48 @@ export default function ThePixelVestMasterApp() {
                     {displayBrand}
                   </p>
 
-                  {isSold ? (
-                    <div
+                  <div
+                    style={{
+                      backgroundColor: "#0c0f16",
+                      border: "1px solid #ef4444",
+                      borderRadius: 12,
+                      padding: 12,
+                      marginBottom: 14,
+                      fontSize: 12,
+                    }}
+                  >
+                    <p
                       style={{
-                        backgroundColor: "#0c0f16",
-                        border: "1px solid #ef4444",
-                        borderRadius: 12,
-                        padding: 12,
-                        marginBottom: 14,
-                        fontSize: 12,
+                        margin: "0 0 4px 0",
+                        color: "#f87171",
+                        fontWeight: 800,
                       }}
                     >
-                      <p style={{ margin: "0 0 4px 0", color: "#f87171", fontWeight: 800 }}>
-                        🔒 Node Permanently Locked (Sold)
-                      </p>
-                      <p style={{ margin: 0, color: "#9ca3af" }}>
-                        Unlocked by: {soldInfo?.owner_name || "Player"}
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <p style={{ margin: "0 0 12px 0", fontSize: 12, color: "#9ca3af" }}>
-                        Tap below to unlock Node #{selectedNode} for{" "}
-                        <strong style={{ color: "#fff" }}>₦100</strong> and
-                        reveal its instant cash gift!
-                      </p>
+                      🔒 Node Permanently Locked (Sold)
+                    </p>
+                    <p style={{ margin: 0, color: "#9ca3af" }}>
+                      Unlocked by: {soldInfo?.owner_name || "Player"}
+                    </p>
+                  </div>
 
-                      <div className="pv-wallets-grid" style={{ textAlign: "left" }}>
-                        <div
-                          onClick={() => setWalletSource("main")}
-                          style={{
-                            padding: 10,
-                            borderRadius: 11,
-                            cursor: "pointer",
-                            backgroundColor:
-                              walletSource === "main" ? "#08291e" : "#0c0f16",
-                            border:
-                              walletSource === "main"
-                                ? "2px solid #10b981"
-                                : "1px solid #262b38",
-                          }}
-                        >
-                          <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: "#9ca3af" }}>
-                            MAIN WALLET
-                          </p>
-                          <p style={{ margin: "3px 0 0 0", fontSize: 14, fontWeight: 900, color: "#10b981" }}>
-                            ₦{getMainBalance(user).toLocaleString()}
-                          </p>
-                        </div>
-
-                        <div
-                          onClick={() => setWalletSource("bonus")}
-                          style={{
-                            padding: 10,
-                            borderRadius: 11,
-                            cursor: "pointer",
-                            backgroundColor:
-                              walletSource === "bonus" ? "#291d08" : "#0c0f16",
-                            border:
-                              walletSource === "bonus"
-                                ? "2px solid #fbbf24"
-                                : "1px solid #262b38",
-                          }}
-                        >
-                          <p style={{ margin: 0, fontSize: 10, fontWeight: 800, color: "#fcd34d" }}>
-                            PLAY BONUS
-                          </p>
-                          <p style={{ margin: "3px 0 0 0", fontSize: 14, fontWeight: 900, color: "#fbbf24" }}>
-                            ₦{getBonusBalance(user).toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={handleUnlockNode}
-                        disabled={unlockLoading}
-                        className="pv-btn-emerald"
-                        style={{
-                          width: "100%",
-                          backgroundColor: "#fbbf24",
-                          marginBottom: 10,
-                          padding: "13px",
-                        }}
-                      >
-                        {unlockLoading
-                          ? "Unlocking Vault..."
-                          : "UNLOCK NODE NOW (₦100)"}
-                      </button>
-                    </>
+                  {isAdminUnlocked && (
+                    <button
+                      onClick={() => {
+                        const target = String(inspectSoldNode);
+                        setInspectSoldNode(null);
+                        setAdminTab("node");
+                        handleAdminLoadNode(target);
+                        setShowAdminModal(true);
+                      }}
+                      className="pv-sector-btn"
+                      style={{ width: "100%", marginBottom: 10 }}
+                    >
+                      ⚙️ Admin: Edit or Unlock Node #{inspectSoldNode}
+                    </button>
                   )}
 
                   <button
-                    onClick={() => {
-                      const target = String(selectedNode);
-                      setSelectedNode(null);
-                      setAdminTab("node");
-                      handleAdminLoadNode(target);
-                      setShowAdminModal(true);
-                    }}
-                    className="pv-sector-btn"
-                    style={{ width: "100%", marginBottom: 10 }}
-                  >
-                    ⚙️ Admin: Edit Node #{selectedNode}
-                  </button>
-
-                  <button
-                    onClick={() => setSelectedNode(null)}
+                    onClick={() => setInspectSoldNode(null)}
                     className="pv-btn-dark"
                     style={{ width: "100%" }}
                   >
@@ -2843,24 +3203,71 @@ export default function ThePixelVestMasterApp() {
       )}
 
       {/* ==================================================================== */}
-      {/* MODAL 2: REWARD RESULT POPUP (WITH ALL 250 NIGERIAN ROASTS & QUOTES) */}
+      {/* MODAL 2: MULTI-NODE REWARD RESULT POPUP + 250 ROASTS                 */}
       {/* ==================================================================== */}
       {rewardResult && (
         <div className="pv-modal-backdrop">
           <div className="pv-modal-card" style={{ textAlign: "center" }}>
             <div style={{ fontSize: 44, marginBottom: 8 }}>
-              {rewardResult.amount > 0 ? "🎉" : "😂"}
+              {rewardResult.totalAmount > 0 ? "🎉" : "😂"}
             </div>
-            <h3 style={{ margin: "0 0 4px 0", fontSize: 20, fontWeight: 900, color: "#fbbf24" }}>
-              {rewardResult.amount > 0
-                ? `Node #${rewardResult.nodeId} Jackpot!`
-                : `Node #${rewardResult.nodeId} Empty!`}
+            <h3
+              style={{
+                margin: "0 0 6px 0",
+                fontSize: 20,
+                fontWeight: 900,
+                color: "#fbbf24",
+              }}
+            >
+              {rewardResult.totalAmount > 0
+                ? `${rewardResult.nodesUnlocked.length} Node${
+                    rewardResult.nodesUnlocked.length > 1 ? "s" : ""
+                  } Unlocked — Cash Hit!`
+                : `${rewardResult.nodesUnlocked.length} Node${
+                    rewardResult.nodesUnlocked.length > 1 ? "s" : ""
+                  } Unlocked — Empty Vault!`}
             </h3>
-            <p style={{ margin: "0 0 14px 0", fontSize: 12, color: "#9ca3af" }}>
-              {rewardResult.brandName}
-            </p>
 
-            {rewardResult.amount > 0 ? (
+            {/* Per-Node Breakdown List */}
+            <div
+              style={{
+                backgroundColor: "#0c0f16",
+                border: "1px solid #262b38",
+                borderRadius: 11,
+                padding: "8px 10px",
+                marginBottom: 12,
+                maxHeight: 130,
+                overflowY: "auto",
+                textAlign: "left",
+              }}
+            >
+              {rewardResult.nodesUnlocked.map((item) => (
+                <div
+                  key={item.nodeId}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 12,
+                    padding: "4px 0",
+                    borderBottom: "1px solid #161b26",
+                  }}
+                >
+                  <span style={{ color: "#d1d5db", fontWeight: 700 }}>
+                    Node #{item.nodeId} ({item.brandName})
+                  </span>
+                  <span
+                    style={{
+                      color: item.amount > 0 ? "#10b981" : "#9ca3af",
+                      fontWeight: 900,
+                    }}
+                  >
+                    +₦{item.amount.toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {rewardResult.totalAmount > 0 ? (
               <div
                 style={{
                   backgroundColor: "#082419",
@@ -2870,11 +3277,25 @@ export default function ThePixelVestMasterApp() {
                   marginBottom: 16,
                 }}
               >
-                <p style={{ margin: 0, fontSize: 11, fontWeight: 800, color: "#6ee7b7" }}>
-                  INSTANT GIFT CREDITED TO MAIN WALLET!
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 11,
+                    fontWeight: 800,
+                    color: "#6ee7b7",
+                  }}
+                >
+                  TOTAL INSTANT GIFT CREDITED TO MAIN WALLET!
                 </p>
-                <p style={{ margin: "6px 0 0 0", fontSize: 28, fontWeight: 900, color: "#10b981" }}>
-                  +₦{rewardResult.amount.toLocaleString()}
+                <p
+                  style={{
+                    margin: "6px 0 0 0",
+                    fontSize: 28,
+                    fontWeight: 900,
+                    color: "#10b981",
+                  }}
+                >
+                  +₦{rewardResult.totalAmount.toLocaleString()}
                 </p>
               </div>
             ) : (
@@ -2944,9 +3365,9 @@ export default function ThePixelVestMasterApp() {
               className="pv-btn-emerald"
               style={{ width: "100%", padding: "12px" }}
             >
-              {rewardResult.amount > 0
+              {rewardResult.totalAmount > 0
                 ? "Claim & Continue Playing"
-                : "No Gree! Tap Another Node 🔥"}
+                : "No Gree! Select More Nodes 🔥"}
             </button>
           </div>
         </div>
@@ -3205,7 +3626,14 @@ export default function ThePixelVestMasterApp() {
                 onSubmit={handleWithdrawSubmit}
                 style={{ display: "flex", flexDirection: "column", gap: 9 }}
               >
-                <p style={{ margin: 0, fontSize: 12, color: "#10b981", fontWeight: 800 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 12,
+                    color: "#10b981",
+                    fontWeight: 800,
+                  }}
+                >
                   Withdrawable Main Wallet: ₦
                   {getMainBalance(user).toLocaleString()}
                 </p>
@@ -3267,7 +3695,14 @@ export default function ThePixelVestMasterApp() {
             {walletTab === "referrals" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <div className="pv-wallet-bonus">
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 800, color: "#fbbf24" }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 13,
+                      fontWeight: 800,
+                      color: "#fbbf24",
+                    }}
+                  >
                     Play Bonus: ₦{getBonusBalance(user).toLocaleString()}
                   </p>
                   <p style={{ margin: "6px 0 0 0", fontSize: 11, color: "#d1d5db" }}>
@@ -3304,7 +3739,7 @@ export default function ThePixelVestMasterApp() {
       )}
 
       {/* ==================================================================== */}
-      {/* MODAL 5: ADMIN STUDIO (EDIT GRID NODES + CREDIT PLAYER WALLET)       */}
+      {/* MODAL 5: ADMIN STUDIO (EDIT NODE + CREDIT USER + CASH OUTS)          */}
       {/* ==================================================================== */}
       {showAdminModal && (
         <div className="pv-modal-backdrop">
@@ -3317,7 +3752,14 @@ export default function ThePixelVestMasterApp() {
                 marginBottom: 14,
               }}
             >
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: "#fbbf24" }}>
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: 16,
+                  fontWeight: 900,
+                  color: "#fbbf24",
+                }}
+              >
                 ⚙️ Admin Studio
               </h3>
               <button
@@ -3332,12 +3774,11 @@ export default function ThePixelVestMasterApp() {
             {!isAdminUnlocked ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
-                  Enter your Admin PIN to edit nodes or credit player wallets
-                  (PIN: 2026):
+                  Enter Master Admin Password to unlock studio controls:
                 </p>
                 <input
                   type="password"
-                  placeholder="Enter Admin PIN"
+                  placeholder="Enter Admin Password"
                   value={adminPinInput}
                   onChange={(e) => setAdminPinInput(e.target.value)}
                   className="pv-input"
@@ -3349,7 +3790,7 @@ export default function ThePixelVestMasterApp() {
                       handleAdminLoadNode(editNodeId);
                       showToast("Admin Studio Unlocked!", "success");
                     } else {
-                      showToast("Invalid Admin PIN", "error");
+                      showToast("Invalid Admin Password", "error");
                     }
                   }}
                   className="pv-btn-emerald"
@@ -3360,16 +3801,23 @@ export default function ThePixelVestMasterApp() {
               </div>
             ) : (
               <>
-                <div className="pv-wallets-grid" style={{ marginBottom: 14 }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr 1fr",
+                    gap: 6,
+                    marginBottom: 14,
+                  }}
+                >
                   <button
                     type="button"
                     onClick={() => setAdminTab("node")}
                     className={
                       adminTab === "node" ? "pv-btn-emerald" : "pv-btn-dark"
                     }
-                    style={{ fontSize: 11, padding: "9px 6px" }}
+                    style={{ fontSize: 10, padding: "8px 4px" }}
                   >
-                    💎 Edit Grid Node
+                    💎 Edit Node
                   </button>
                   <button
                     type="button"
@@ -3377,13 +3825,28 @@ export default function ThePixelVestMasterApp() {
                     className={
                       adminTab === "wallet" ? "pv-btn-emerald" : "pv-btn-dark"
                     }
-                    style={{ fontSize: 11, padding: "9px 6px" }}
+                    style={{ fontSize: 10, padding: "8px 4px" }}
                   >
-                    💰 Credit Player Wallet
+                    💰 Credit User
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminTab("withdrawals");
+                      fetchAdminWithdrawals();
+                    }}
+                    className={
+                      adminTab === "withdrawals"
+                        ? "pv-btn-emerald"
+                        : "pv-btn-dark"
+                    }
+                    style={{ fontSize: 10, padding: "8px 4px" }}
+                  >
+                    🏦 Cash Outs
                   </button>
                 </div>
 
-                {adminTab === "node" ? (
+                {adminTab === "node" && (
                   <form
                     onSubmit={handleSaveNodeOverride}
                     style={{ display: "flex", flexDirection: "column", gap: 10 }}
@@ -3549,14 +4012,16 @@ export default function ThePixelVestMasterApp() {
                         : `SAVE CHANGES TO NODE #${editNodeId}`}
                     </button>
                   </form>
-                ) : (
+                )}
+
+                {adminTab === "wallet" && (
                   <form
                     onSubmit={handleAdminCreditPlayer}
                     style={{ display: "flex", flexDirection: "column", gap: 10 }}
                   >
                     <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
-                      If a player&apos;s bank transfer ever gets stuck, credit
-                      their wallet directly here instead of refunding cash:
+                      Credit any player&apos;s Main Wallet or Play Bonus
+                      instantly by phone number:
                     </p>
                     <div>
                       <label
@@ -3645,6 +4110,115 @@ export default function ThePixelVestMasterApp() {
                           ).toLocaleString()} TO PLAYER NOW`}
                     </button>
                   </form>
+                )}
+
+                {adminTab === "withdrawals" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <button
+                      type="button"
+                      onClick={fetchAdminWithdrawals}
+                      className="pv-btn-dark"
+                      style={{ width: "100%", fontSize: 11 }}
+                    >
+                      ↻{" "}
+                      {loadingWithdrawals
+                        ? "Loading..."
+                        : "Refresh Cash Out Requests"}
+                    </button>
+
+                    {withdrawalsList.length === 0 ? (
+                      <p
+                        style={{
+                          textAlign: "center",
+                          fontSize: 12,
+                          color: "#9ca3af",
+                        }}
+                      >
+                        No withdrawal requests found yet.
+                      </p>
+                    ) : (
+                      withdrawalsList.map((w, idx) => (
+                        <div
+                          key={w.id || idx}
+                          style={{
+                            backgroundColor: "#0c0f16",
+                            border:
+                              w.status === "paid"
+                                ? "1px solid #10b981"
+                                : "1px solid #fbbf24",
+                            borderRadius: 12,
+                            padding: 12,
+                            fontSize: 12,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              fontWeight: 900,
+                            }}
+                          >
+                            <span style={{ color: "#10b981", fontSize: 15 }}>
+                              ₦{Number(w.amount || 0).toLocaleString()}
+                            </span>
+                            <span
+                              style={{
+                                color:
+                                  w.status === "paid" ? "#10b981" : "#fbbf24",
+                                textTransform: "uppercase",
+                                fontSize: 11,
+                              }}
+                            >
+                              {w.status || "pending"}
+                            </span>
+                          </div>
+                          <p
+                            style={{
+                              margin: "6px 0 2px 0",
+                              color: "#ffffff",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {w.bank_name} • {w.account_number}
+                          </p>
+                          <p
+                            style={{
+                              margin: "0 0 8px 0",
+                              color: "#9ca3af",
+                              fontSize: 11,
+                            }}
+                          >
+                            Name: {w.account_name} | Phone: {w.user_phone}
+                          </p>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  String(w.account_number || "")
+                                );
+                                showToast("Account number copied!", "success");
+                              }}
+                              className="pv-btn-dark"
+                              style={{ flex: 1, fontSize: 11, padding: "7px" }}
+                            >
+                              📋 Copy Acct No
+                            </button>
+                            {w.status !== "paid" && (
+                              <button
+                                type="button"
+                                onClick={() => markWithdrawalPaid(w)}
+                                className="pv-btn-emerald"
+                                style={{ flex: 1, fontSize: 11, padding: "7px" }}
+                              >
+                                ✅ Mark Paid
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 )}
               </>
             )}
