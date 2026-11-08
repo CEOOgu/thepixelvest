@@ -12,7 +12,6 @@ if (typeof window !== "undefined") {
     (window as any).__pvDeferredPrompt = e;
   });
 
-  // Preload Paystack script immediately at the window level
   if (!document.getElementById("paystack-inline-js")) {
     const s = document.createElement("script");
     s.id = "paystack-inline-js";
@@ -32,10 +31,13 @@ const supabase =
     ? createClient(supabaseUrl, supabaseAnonKey)
     : null;
 
-// Hardcoded Live Paystack Public Key so Vercel test env vars never override it
+// Hardcoded Live Paystack Public Key
 const PAYSTACK_PUBLIC_KEY = "pk_live_4f604b2d9d9689f50eba439e704600844f7dfd01";
 
+// Official Google AdSense Publisher & Ad Unit Slot IDs
 const ADSENSE_CLIENT_ID = "ca-pub-9204985294084444";
+const ADSENSE_UNIT_SLOT_ID = "3277719159";
+
 const ADMIN_MASTER_PIN = process.env.NEXT_PUBLIC_ADMIN_PIN || "2026";
 
 const TOTAL_NODES = 1000000;
@@ -347,10 +349,10 @@ function normalizePhone(phone: string): string {
 }
 
 // ============================================================================
-// 4. COMPACT LOCKED-HEIGHT GOOGLE ADSENSE BANNER
+// 4. COMPACT LOCKED-HEIGHT GOOGLE ADSENSE BANNER (OFFICIAL SLOT 3277719159)
 // ============================================================================
 function AdSenseBanner({
-  slotId = "9204985294",
+  slotId = ADSENSE_UNIT_SLOT_ID,
   label = "SPONSORED AD SPACE",
 }: {
   slotId?: string;
@@ -380,6 +382,8 @@ function AdSenseBanner({
           }}
           data-ad-client={ADSENSE_CLIENT_ID}
           data-ad-slot={slotId}
+          data-ad-format="auto"
+          data-full-width-responsive="true"
         />
       </div>
     </div>
@@ -428,6 +432,13 @@ export default function ThePixelVestMasterApp() {
   );
   const [fundAmount, setFundAmount] = useState<string>("500");
   const [paystackConnecting, setPaystackConnecting] = useState<boolean>(false);
+  const [pendingTx, setPendingTx] = useState<{
+    ref: string;
+    amount: number;
+    phone: string;
+    time: number;
+  } | null>(null);
+
   const [withdrawAmount, setWithdrawAmount] = useState<string>("");
   const [bankName, setBankName] = useState<string>("");
   const [accountNumber, setAccountNumber] = useState<string>("");
@@ -435,9 +446,18 @@ export default function ThePixelVestMasterApp() {
   const [withdrawPinInput, setWithdrawPinInput] = useState<string>("");
   const [withdrawLoading, setWithdrawLoading] = useState<boolean>(false);
 
+  // Admin Studio States (Node Editor + Instant Player Wallet Credit)
   const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(false);
   const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
+  const [adminTab, setAdminTab] = useState<"wallet" | "node">("wallet");
   const [adminPinInput, setAdminPinInput] = useState<string>("");
+  const [adminCreditPhone, setAdminCreditPhone] = useState<string>("");
+  const [adminCreditAmount, setAdminCreditAmount] = useState<string>("500");
+  const [adminCreditType, setAdminCreditType] = useState<"main" | "bonus">(
+    "main"
+  );
+  const [adminCrediting, setAdminCrediting] = useState<boolean>(false);
+
   const [editNodeId, setEditNodeId] = useState<string>("1");
   const [editBrandName, setEditBrandName] = useState<string>("");
   const [editLogoUrl, setEditLogoUrl] = useState<string>("");
@@ -460,7 +480,7 @@ export default function ThePixelVestMasterApp() {
     type: "success" | "error" | "info" = "info"
   ) => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 4000);
+    setTimeout(() => setToast(null), 4500);
   };
 
   useEffect(() => {
@@ -497,7 +517,6 @@ export default function ThePixelVestMasterApp() {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
 
-    // Read early-captured install prompt if it fired before React hydrated
     if ((window as any).__pvDeferredPrompt) {
       setDeferredPrompt((window as any).__pvDeferredPrompt);
     }
@@ -538,7 +557,15 @@ export default function ThePixelVestMasterApp() {
       if (savedRef) setAuthReferral(savedRef);
     }
 
-    // 5. Restore Local Overrides + User Session
+    // 5. Restore Pending Paystack Tx if any
+    const savedPending = localStorage.getItem("pv_active_pending_tx");
+    if (savedPending) {
+      try {
+        setPendingTx(JSON.parse(savedPending));
+      } catch (e) {}
+    }
+
+    // 6. Restore Local Overrides + User Session
     const localOverrides = localStorage.getItem("pixelvest_node_overrides");
     if (localOverrides) {
       try {
@@ -569,11 +596,19 @@ export default function ThePixelVestMasterApp() {
     return Number(u.bonus_balance ?? u.play_bonus ?? 0);
   };
 
+  // ============================================================================
+  // SAFE SESSION FETCH (NEVER OVERWRITES AN UNSYNCED DEPOSIT)
+  // ============================================================================
   const fetchUserSession = async (phone: string) => {
     const cleanPhone = normalizePhone(phone);
+    const cachedStr = localStorage.getItem(`pv_user_${cleanPhone}`);
+    const cachedUser = cachedStr ? JSON.parse(cachedStr) : null;
+    const unsyncedAdd = Number(
+      localStorage.getItem(`pv_unsynced_add_${cleanPhone}`) || "0"
+    );
+
     if (!supabase) {
-      const cached = localStorage.getItem(`pv_user_${cleanPhone}`);
-      if (cached) setUser(JSON.parse(cached));
+      if (cachedUser) setUser(cachedUser);
       return;
     }
 
@@ -585,16 +620,44 @@ export default function ThePixelVestMasterApp() {
         .maybeSingle();
 
       if (data && !error) {
-        setUser(data);
+        let finalUser = { ...data };
+
+        // If the player had a Paystack deposit while network was reconnecting, push it to Supabase now!
+        if (unsyncedAdd > 0) {
+          const syncedMain = Number(data.wallet_balance ?? 0) + unsyncedAdd;
+          finalUser.wallet_balance = syncedMain;
+          const { error: syncErr } = await supabase
+            .from("users")
+            .update({ wallet_balance: syncedMain })
+            .eq("phone", cleanPhone);
+          if (!syncErr) {
+            localStorage.removeItem(`pv_unsynced_add_${cleanPhone}`);
+          }
+        } else if (
+          cachedUser &&
+          Number(cachedUser.wallet_balance ?? 0) >
+            Number(data.wallet_balance ?? 0)
+        ) {
+          // Ensure a newly credited local balance is pushed up rather than wiped
+          const higherBal = Number(cachedUser.wallet_balance);
+          finalUser.wallet_balance = higherBal;
+          await supabase
+            .from("users")
+            .update({ wallet_balance: higherBal })
+            .eq("phone", cleanPhone);
+        }
+
+        setUser(finalUser);
         localStorage.setItem("pixelvest_active_phone", cleanPhone);
-        localStorage.setItem(`pv_user_${cleanPhone}`, JSON.stringify(data));
-      } else {
-        const cached = localStorage.getItem(`pv_user_${cleanPhone}`);
-        if (cached) setUser(JSON.parse(cached));
+        localStorage.setItem(
+          `pv_user_${cleanPhone}`,
+          JSON.stringify(finalUser)
+        );
+      } else if (cachedUser) {
+        setUser(cachedUser);
       }
     } catch (e) {
-      const cached = localStorage.getItem(`pv_user_${cleanPhone}`);
-      if (cached) setUser(JSON.parse(cached));
+      if (cachedUser) setUser(cachedUser);
     }
   };
 
@@ -603,11 +666,14 @@ export default function ThePixelVestMasterApp() {
     updates: Record<string, any>
   ) => {
     const cleanPhone = normalizePhone(phone);
-    const mergedUser = { ...(user || {}), ...updates };
-    if (user && normalizePhone(user.phone) === cleanPhone) {
+    const cachedStr = localStorage.getItem(`pv_user_${cleanPhone}`);
+    const baseUser = user || (cachedStr ? JSON.parse(cachedStr) : {});
+    const mergedUser = { ...baseUser, ...updates };
+
+    if (!user || normalizePhone(user.phone) === cleanPhone) {
       setUser(mergedUser);
-      localStorage.setItem(`pv_user_${cleanPhone}`, JSON.stringify(mergedUser));
     }
+    localStorage.setItem(`pv_user_${cleanPhone}`, JSON.stringify(mergedUser));
 
     if (!supabase) return true;
 
@@ -630,6 +696,125 @@ export default function ThePixelVestMasterApp() {
         .eq("phone", cleanPhone);
     }
     return true;
+  };
+
+  // ============================================================================
+  // ZERO-LOSS PAYSTACK DEPOSIT CREDITING ENGINE (IDEMPOTENT + AUTO-RETRY)
+  // ============================================================================
+  const creditWalletFromPaystack = async (
+    rawPhone: string,
+    amountNaira: number,
+    txRef: string
+  ) => {
+    const cleanPhone = normalizePhone(rawPhone);
+
+    // 1. Idempotency Guard: Never double-credit the same Paystack reference
+    const creditedRefsStr = localStorage.getItem("pv_credited_tx_refs") || "[]";
+    let creditedRefs: string[] = [];
+    try {
+      creditedRefs = JSON.parse(creditedRefsStr);
+    } catch (e) {
+      creditedRefs = [];
+    }
+
+    if (creditedRefs.includes(txRef)) {
+      showToast("Deposit already credited to your Main Wallet!", "success");
+      setShowWalletModal(false);
+      return;
+    }
+
+    creditedRefs.push(txRef);
+    localStorage.setItem("pv_credited_tx_refs", JSON.stringify(creditedRefs));
+    localStorage.removeItem("pv_active_pending_tx");
+    setPendingTx(null);
+
+    // 2. INSTANT Optimistic UI + LocalStorage Credit (0.01s before network wakes up)
+    const cachedStr = localStorage.getItem(`pv_user_${cleanPhone}`);
+    const currentObj =
+      user && normalizePhone(user.phone) === cleanPhone
+        ? user
+        : cachedStr
+        ? JSON.parse(cachedStr)
+        : { phone: cleanPhone, wallet_balance: 0, bonus_balance: 0 };
+
+    const optimisticNewBalance =
+      Number(currentObj.wallet_balance ?? 0) + amountNaira;
+    const updatedLocalUser = {
+      ...currentObj,
+      wallet_balance: optimisticNewBalance,
+    };
+
+    setUser(updatedLocalUser);
+    localStorage.setItem(
+      `pv_user_${cleanPhone}`,
+      JSON.stringify(updatedLocalUser)
+    );
+    setShowWalletModal(false);
+    showToast(
+      `✅ ₦${amountNaira.toLocaleString()} credited to your Main Wallet!`,
+      "success"
+    );
+
+    // 3. Queue unsynced amount in case mobile network is still waking up from bank app
+    const prevUnsynced = Number(
+      localStorage.getItem(`pv_unsynced_add_${cleanPhone}`) || "0"
+    );
+    localStorage.setItem(
+      `pv_unsynced_add_${cleanPhone}`,
+      String(prevUnsynced + amountNaira)
+    );
+
+    // 4. Sync with Supabase with 3 automatic retries
+    if (supabase) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const { data: freshRow } = await supabase
+            .from("users")
+            .select("wallet_balance")
+            .eq("phone", cleanPhone)
+            .maybeSingle();
+
+          const dbBase =
+            freshRow && freshRow.wallet_balance !== undefined
+              ? Number(freshRow.wallet_balance)
+              : Number(currentObj.wallet_balance ?? 0);
+
+          const finalBalance = Math.max(
+            optimisticNewBalance,
+            dbBase + amountNaira
+          );
+
+          const { error: upErr } = await supabase
+            .from("users")
+            .update({ wallet_balance: finalBalance })
+            .eq("phone", cleanPhone);
+
+          if (!upErr) {
+            localStorage.removeItem(`pv_unsynced_add_${cleanPhone}`);
+            const syncedObj = { ...updatedLocalUser, wallet_balance: finalBalance };
+            setUser(syncedObj);
+            localStorage.setItem(
+              `pv_user_${cleanPhone}`,
+              JSON.stringify(syncedObj)
+            );
+
+            await supabase.from("transactions").insert([
+              {
+                user_phone: cleanPhone,
+                type: "deposit",
+                amount: amountNaira,
+                status: "completed",
+                reference: txRef,
+              },
+            ]);
+            break;
+          }
+        } catch (err) {
+          // Wait 1.5s before retrying if mobile network is reconnecting
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+    }
   };
 
   const fetchSectorBoardData = async (sector: number) => {
@@ -1030,7 +1215,7 @@ export default function ThePixelVestMasterApp() {
   };
 
   // ============================================================================
-  // BULLETPROOF SELF-HEALING PAYSTACK LIVE CHECKOUT
+  // BULLETPROOF PAYSTACK LIVE CHECKOUT (CREDITS EVEN IF BANK TRANSFER STUCK)
   // ============================================================================
   const handleFundWithPaystack = () => {
     if (!user) {
@@ -1059,6 +1244,16 @@ export default function ThePixelVestMasterApp() {
       const cleanPhone = normalizePhone(user.phone);
       const txRef = `PV_${cleanPhone}_${Date.now()}`;
 
+      // Save pending deposit state before opening modal in case window closes
+      const newPending = {
+        ref: txRef,
+        amount: amountNaira,
+        phone: cleanPhone,
+        time: Date.now(),
+      };
+      setPendingTx(newPending);
+      localStorage.setItem("pv_active_pending_tx", JSON.stringify(newPending));
+
       const handler = PaystackPop.setup({
         key: PAYSTACK_PUBLIC_KEY,
         email: `${cleanPhone}@thepixelvest.com.ng`,
@@ -1075,30 +1270,21 @@ export default function ThePixelVestMasterApp() {
           ],
         },
         callback: function (response: any) {
-          const currentMain = getMainBalance(user);
-          const newMain = currentMain + amountNaira;
-
-          updateUserRecord(cleanPhone, { wallet_balance: newMain }).then(() => {
-            if (supabase) {
-              supabase.from("transactions").insert([
-                {
-                  user_phone: cleanPhone,
-                  type: "deposit",
-                  amount: amountNaira,
-                  status: "completed",
-                  reference: response.reference,
-                },
-              ]);
-            }
-            setShowWalletModal(false);
-            showToast(
-              `₦${amountNaira.toLocaleString()} credited to your Main Wallet!`,
-              "success"
-            );
-          });
+          const finalRef = response?.reference || txRef;
+          creditWalletFromPaystack(cleanPhone, amountNaira, finalRef);
+        },
+        onBankTransferConfirmationPending: function (response: any) {
+          // Fires when player clicks "I have sent the money" then closes checkout while Paystack is confirming
+          const finalRef = response?.reference || txRef;
+          creditWalletFromPaystack(cleanPhone, amountNaira, finalRef);
         },
         onClose: function () {
-          showToast("Payment window closed.", "info");
+          // Refresh user session from DB in case deposit settled right before closing
+          fetchUserSession(cleanPhone);
+          showToast(
+            "If you completed a transfer, tap 'Sync Pending Deposit' below.",
+            "info"
+          );
         },
       });
 
@@ -1116,13 +1302,11 @@ export default function ThePixelVestMasterApp() {
       }, 500);
     };
 
-    // If Paystack is already in memory, launch immediately
     if ((window as any).PaystackPop) {
       openPaystackModalNow();
       return;
     }
 
-    // Otherwise dynamically reload script and auto-launch on load
     setPaystackConnecting(true);
     const existingScript = document.getElementById("paystack-inline-js");
     if (existingScript) {
@@ -1202,6 +1386,79 @@ export default function ThePixelVestMasterApp() {
       showToast("Could not submit withdrawal. Try again.", "error");
     } finally {
       setWithdrawLoading(false);
+    }
+  };
+
+  // ============================================================================
+  // ADMIN 1-CLICK PLAYER WALLET TOP-UP (SO YOU NEVER HAVE TO REFUND AGAIN)
+  // ============================================================================
+  const handleAdminCreditPlayer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetPhone = normalizePhone(adminCreditPhone);
+    const amt = Number(adminCreditAmount);
+
+    if (targetPhone.length < 10 || isNaN(amt) || amt <= 0) {
+      showToast("Enter a valid 11-digit phone number and amount.", "error");
+      return;
+    }
+
+    setAdminCrediting(true);
+    try {
+      let currentMain = 0;
+      let currentBonus = 0;
+
+      if (supabase) {
+        const { data: targetUser } = await supabase
+          .from("users")
+          .select("*")
+          .eq("phone", targetPhone)
+          .maybeSingle();
+
+        if (!targetUser) {
+          showToast(
+            `Player ${targetPhone} not found in database! Ask them to register first.`,
+            "error"
+          );
+          setAdminCrediting(false);
+          return;
+        }
+
+        currentMain = Number(targetUser.wallet_balance ?? 0);
+        currentBonus = Number(targetUser.bonus_balance ?? 0);
+
+        const updates =
+          adminCreditType === "main"
+            ? { wallet_balance: currentMain + amt }
+            : { bonus_balance: currentBonus + amt };
+
+        await supabase.from("users").update(updates).eq("phone", targetPhone);
+        await supabase.from("transactions").insert([
+          {
+            user_phone: targetPhone,
+            type: "admin_credit",
+            amount: amt,
+            status: "completed",
+            reference: `ADMIN_${Date.now()}`,
+          },
+        ]);
+      }
+
+      // If crediting the currently logged-in account on this phone, update state immediately
+      if (user && normalizePhone(user.phone) === targetPhone) {
+        await fetchUserSession(targetPhone);
+      }
+
+      showToast(
+        `✅ Credited ₦${amt.toLocaleString()} to ${targetPhone}'s ${
+          adminCreditType === "main" ? "Main Wallet" : "Play Bonus"
+        }!`,
+        "success"
+      );
+      setAdminCreditPhone("");
+    } catch (err) {
+      showToast("Error crediting player wallet.", "error");
+    } finally {
+      setAdminCrediting(false);
     }
   };
 
@@ -1327,14 +1584,13 @@ export default function ThePixelVestMasterApp() {
   };
 
   // ============================================================================
-  // DIRECT APP INSTALL & DOWNLOAD ENGINE (NO PASSIVE INSTRUCTION POPUP)
+  // DIRECT APP INSTALL & DOWNLOAD ENGINE
   // ============================================================================
   const handleInstallApp = async () => {
     const promptEvent =
       deferredPrompt ||
       (typeof window !== "undefined" ? (window as any).__pvDeferredPrompt : null);
 
-    // 1. Trigger Native Android WebAPK Install Dialog if available
     if (promptEvent) {
       try {
         promptEvent.prompt();
@@ -1348,14 +1604,12 @@ export default function ThePixelVestMasterApp() {
       } catch (err) {}
     }
 
-    // 2. If user is inside an In-App Browser on Android (Facebook, X, Copilot),
-    // automatically break out into Google Chrome where the APK installer runs,
-    // AND trigger an immediate direct download of the PixelVest Standalone App file!
     const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
     const isAndroid = /android/i.test(ua);
-    const isInApp = /(FBAN|FBAV|Instagram|Twitter|Line|MicroMessenger|BingWeb|Sapphire)/i.test(
-      ua
-    );
+    const isInApp =
+      /(FBAN|FBAV|Instagram|Twitter|Line|MicroMessenger|BingWeb|Sapphire)/i.test(
+        ua
+      );
 
     if (isAndroid && isInApp) {
       showToast("Opening Chrome App Installer...", "success");
@@ -1364,7 +1618,6 @@ export default function ThePixelVestMasterApp() {
       return;
     }
 
-    // 3. Direct App Launcher File Download so clicking "Install App" ALWAYS downloads immediately
     showToast("Downloading The Pixel Vest App...", "success");
     const appHtml = `<!DOCTYPE html>
 <html lang="en">
@@ -1375,7 +1628,7 @@ export default function ThePixelVestMasterApp() {
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="theme-color" content="#07090e" />
 <title>The Pixel Vest</title>
-<link rel="icon" href="https://www.thepixelvest.com.ng/icon.png" />
+<link rel="icon" href="https://www.thepixelvest.com.ng/icon.jpg" />
 <style>
   html,body,iframe { margin:0; padding:0; width:100%; height:100%; background:#07090e; border:0; overflow:hidden; }
 </style>
@@ -2067,7 +2320,10 @@ export default function ThePixelVestMasterApp() {
 
         <div className="pv-refresh-row">
           <button
-            onClick={() => fetchSectorBoardData(currentSector)}
+            onClick={() => {
+              fetchSectorBoardData(currentSector);
+              if (user?.phone) fetchUserSession(user.phone);
+            }}
             className="pv-btn-dark"
           >
             ↻ {boardLoading ? "Refreshing..." : "Refresh Live Board"}
@@ -2078,13 +2334,16 @@ export default function ThePixelVestMasterApp() {
               onClick={() => setShowAdminModal(true)}
               className="pv-sector-btn"
             >
-              ⚙️ Edit Nodes
+              ⚙️ Admin Studio
             </button>
           )}
         </div>
 
-        {/* 8. COMPACT GOOGLE ADSENSE BANNER SPACE */}
-        <AdSenseBanner slotId="9204985294" label="SPONSORED BANNER AD" />
+        {/* 8. COMPACT GOOGLE ADSENSE BANNER SPACE (OFFICIAL UNIT 3277719159) */}
+        <AdSenseBanner
+          slotId={ADSENSE_UNIT_SLOT_ID}
+          label="SPONSORED BANNER AD"
+        />
 
         {/* 9. SECTOR INDICATOR & PAGINATION CONTROLS */}
         <div>
@@ -2199,8 +2458,11 @@ export default function ThePixelVestMasterApp() {
           })}
         </div>
 
-        {/* 11. BOTTOM COMPACT GOOGLE ADSENSE BANNER */}
-        <AdSenseBanner slotId="9204985295" label="SPONSORED PARTNER AD" />
+        {/* 11. BOTTOM COMPACT GOOGLE ADSENSE BANNER (OFFICIAL UNIT 3277719159) */}
+        <AdSenseBanner
+          slotId={ADSENSE_UNIT_SLOT_ID}
+          label="SPONSORED PARTNER AD"
+        />
 
         {/* 12. SEO & GOOGLE ADSENSE RICH CONTENT SECTION */}
         <section className="pv-info-card">
@@ -2423,6 +2685,7 @@ export default function ThePixelVestMasterApp() {
                       onClick={() => {
                         const target = String(selectedNode);
                         setSelectedNode(null);
+                        setAdminTab("node");
                         handleAdminLoadNode(target);
                         setShowAdminModal(true);
                       }}
@@ -2785,6 +3048,24 @@ export default function ThePixelVestMasterApp() {
                     ? "OPENING PAYSTACK CHECKOUT..."
                     : `PAY ₦${Number(fundAmount || 0).toLocaleString()} WITH PAYSTACK`}
                 </button>
+
+                {/* Recovery Sync Button if Bank Transfer Window Froze or Closed */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (user?.phone) {
+                      fetchUserSession(user.phone);
+                      showToast(
+                        "Wallet synced with server! Checking latest deposits...",
+                        "success"
+                      );
+                    }
+                  }}
+                  className="pv-btn-dark"
+                  style={{ width: "100%", fontSize: 11, padding: "9px" }}
+                >
+                  ↻ Window Closed After Transfer? Tap to Sync Wallet
+                </button>
               </div>
             )}
 
@@ -2892,7 +3173,7 @@ export default function ThePixelVestMasterApp() {
       )}
 
       {/* ==================================================================== */}
-      {/* MODAL 5: ADMIN NODE EDITOR STUDIO (EDIT NAME, PICTURE & GIFT AMOUNT) */}
+      {/* MODAL 5: ADMIN STUDIO (CREDIT PLAYER WALLET + EDIT GRID NODES)       */}
       {/* ==================================================================== */}
       {showAdminModal && (
         <div className="pv-modal-backdrop">
@@ -2906,7 +3187,7 @@ export default function ThePixelVestMasterApp() {
               }}
             >
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: "#fbbf24" }}>
-                ⚙️ Admin Node Editor Studio
+                ⚙️ Admin Studio
               </h3>
               <button
                 onClick={() => setShowAdminModal(false)}
@@ -2920,8 +3201,8 @@ export default function ThePixelVestMasterApp() {
             {!isAdminUnlocked ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
-                  Enter your Admin PIN to edit node names, upload pictures, and
-                  change gift amounts (PIN: 2026):
+                  Enter your Admin PIN to credit player wallets or edit nodes
+                  (PIN: 2026):
                 </p>
                 <input
                   type="password"
@@ -2947,106 +3228,261 @@ export default function ThePixelVestMasterApp() {
                 </button>
               </div>
             ) : (
-              <form
-                onSubmit={handleSaveNodeOverride}
-                style={{ display: "flex", flexDirection: "column", gap: 10 }}
-              >
-                <div>
-                  <label style={{ fontSize: 11, color: "#9ca3af", display: "block", marginBottom: 4 }}>
-                    1. Node Number (1 – 1,000,000)
-                  </label>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input
-                      type="number"
-                      min={1}
-                      max={1000000}
-                      required
-                      value={editNodeId}
-                      onChange={(e) => handleAdminLoadNode(e.target.value)}
-                      className="pv-input"
-                    />
-                    <span
-                      style={{
-                        backgroundColor: "#0c0f16",
-                        border: "1px solid #262b38",
-                        borderRadius: 10,
-                        padding: "8px 10px",
-                        fontSize: 11,
-                        color: "#fbbf24",
-                        display: "flex",
-                        alignItems: "center",
-                        whiteSpace: "nowrap",
-                      }}
+              <>
+                <div className="pv-wallets-grid" style={{ marginBottom: 14 }}>
+                  <button
+                    type="button"
+                    onClick={() => setAdminTab("wallet")}
+                    className={
+                      adminTab === "wallet" ? "pv-btn-emerald" : "pv-btn-dark"
+                    }
+                    style={{ fontSize: 11, padding: "9px 6px" }}
+                  >
+                    💰 Credit Player Wallet
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdminTab("node")}
+                    className={
+                      adminTab === "node" ? "pv-btn-emerald" : "pv-btn-dark"
+                    }
+                    style={{ fontSize: 11, padding: "9px 6px" }}
+                  >
+                    💎 Edit Grid Node
+                  </button>
+                </div>
+
+                {adminTab === "wallet" ? (
+                  <form
+                    onSubmit={handleAdminCreditPlayer}
+                    style={{ display: "flex", flexDirection: "column", gap: 10 }}
+                  >
+                    <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
+                      If a player&apos;s bank transfer ever gets stuck, credit
+                      their wallet directly here instead of refunding cash:
+                    </p>
+                    <div>
+                      <label
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          display: "block",
+                          marginBottom: 4,
+                        }}
+                      >
+                        Player Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="e.g. 08012345678"
+                        value={adminCreditPhone}
+                        onChange={(e) => setAdminCreditPhone(e.target.value)}
+                        className="pv-input"
+                        style={{ width: "100%" }}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          display: "block",
+                          marginBottom: 4,
+                        }}
+                      >
+                        Amount to Credit (₦)
+                      </label>
+                      <input
+                        type="number"
+                        min={50}
+                        required
+                        placeholder="e.g. 500"
+                        value={adminCreditAmount}
+                        onChange={(e) => setAdminCreditAmount(e.target.value)}
+                        className="pv-input"
+                        style={{
+                          width: "100%",
+                          color: "#10b981",
+                          fontWeight: 900,
+                        }}
+                      />
+                    </div>
+
+                    <div className="pv-wallets-grid">
+                      <button
+                        type="button"
+                        onClick={() => setAdminCreditType("main")}
+                        className={
+                          adminCreditType === "main"
+                            ? "pv-sector-btn"
+                            : "pv-btn-dark"
+                        }
+                      >
+                        Main Wallet
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAdminCreditType("bonus")}
+                        className={
+                          adminCreditType === "bonus"
+                            ? "pv-sector-btn"
+                            : "pv-btn-dark"
+                        }
+                      >
+                        Play Bonus
+                      </button>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={adminCrediting}
+                      className="pv-btn-emerald"
+                      style={{ width: "100%", padding: "12px", marginTop: 4 }}
                     >
-                      Default: ₦
-                      {getExact12TierNodePrize(
-                        Number(editNodeId) || 1
-                      ).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
+                      {adminCrediting
+                        ? "Crediting Player..."
+                        : `CREDIT ₦${Number(
+                            adminCreditAmount || 0
+                          ).toLocaleString()} TO PLAYER NOW`}
+                    </button>
+                  </form>
+                ) : (
+                  <form
+                    onSubmit={handleSaveNodeOverride}
+                    style={{ display: "flex", flexDirection: "column", gap: 10 }}
+                  >
+                    <div>
+                      <label
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          display: "block",
+                          marginBottom: 4,
+                        }}
+                      >
+                        1. Node Number (1 – 1,000,000)
+                      </label>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input
+                          type="number"
+                          min={1}
+                          max={1000000}
+                          required
+                          value={editNodeId}
+                          onChange={(e) => handleAdminLoadNode(e.target.value)}
+                          className="pv-input"
+                        />
+                        <span
+                          style={{
+                            backgroundColor: "#0c0f16",
+                            border: "1px solid #262b38",
+                            borderRadius: 10,
+                            padding: "8px 10px",
+                            fontSize: 11,
+                            color: "#fbbf24",
+                            display: "flex",
+                            alignItems: "center",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Default: ₦
+                          {getExact12TierNodePrize(
+                            Number(editNodeId) || 1
+                          ).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
 
-                <div>
-                  <label style={{ fontSize: 11, color: "#9ca3af", display: "block", marginBottom: 4 }}>
-                    2. Node Name / Brand Title
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. MTN Gold Vault, VIP Node"
-                    value={editBrandName}
-                    onChange={(e) => setEditBrandName(e.target.value)}
-                    className="pv-input"
-                    style={{ width: "100%" }}
-                  />
-                </div>
+                    <div>
+                      <label
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          display: "block",
+                          marginBottom: 4,
+                        }}
+                      >
+                        2. Node Name / Brand Title
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. MTN Gold Vault, VIP Node"
+                        value={editBrandName}
+                        onChange={(e) => setEditBrandName(e.target.value)}
+                        className="pv-input"
+                        style={{ width: "100%" }}
+                      />
+                    </div>
 
-                <div>
-                  <label style={{ fontSize: 11, color: "#9ca3af", display: "block", marginBottom: 4 }}>
-                    3. Upload Picture or Paste Image URL
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageFileUpload}
-                    style={{ fontSize: 11, marginBottom: 6, width: "100%" }}
-                  />
-                  <input
-                    type="text"
-                    placeholder="Or paste image link (https://...)"
-                    value={editLogoUrl}
-                    onChange={(e) => setEditLogoUrl(e.target.value)}
-                    className="pv-input"
-                    style={{ width: "100%" }}
-                  />
-                </div>
+                    <div>
+                      <label
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          display: "block",
+                          marginBottom: 4,
+                        }}
+                      >
+                        3. Upload Picture or Paste Image URL
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageFileUpload}
+                        style={{ fontSize: 11, marginBottom: 6, width: "100%" }}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Or paste image link (https://...)"
+                        value={editLogoUrl}
+                        onChange={(e) => setEditLogoUrl(e.target.value)}
+                        className="pv-input"
+                        style={{ width: "100%" }}
+                      />
+                    </div>
 
-                <div>
-                  <label style={{ fontSize: 11, color: "#9ca3af", display: "block", marginBottom: 4 }}>
-                    4. Gift Amount Inside This Node (₦)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    required
-                    placeholder="e.g. 5000, 1000, 100, 0"
-                    value={editCustomPrize}
-                    onChange={(e) => setEditCustomPrize(e.target.value)}
-                    className="pv-input"
-                    style={{ width: "100%", color: "#10b981", fontWeight: 900 }}
-                  />
-                </div>
+                    <div>
+                      <label
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          display: "block",
+                          marginBottom: 4,
+                        }}
+                      >
+                        4. Gift Amount Inside This Node (₦)
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        required
+                        placeholder="e.g. 5000, 1000, 100, 0"
+                        value={editCustomPrize}
+                        onChange={(e) => setEditCustomPrize(e.target.value)}
+                        className="pv-input"
+                        style={{
+                          width: "100%",
+                          color: "#10b981",
+                          fontWeight: 900,
+                        }}
+                      />
+                    </div>
 
-                <button
-                  type="submit"
-                  disabled={adminSaving}
-                  className="pv-btn-emerald"
-                  style={{ width: "100%", padding: "12px", marginTop: 4 }}
-                >
-                  {adminSaving
-                    ? "Saving Node..."
-                    : `SAVE CHANGES TO NODE #${editNodeId}`}
-                </button>
-              </form>
+                    <button
+                      type="submit"
+                      disabled={adminSaving}
+                      className="pv-btn-emerald"
+                      style={{ width: "100%", padding: "12px", marginTop: 4 }}
+                    >
+                      {adminSaving
+                        ? "Saving Node..."
+                        : `SAVE CHANGES TO NODE #${editNodeId}`}
+                    </button>
+                  </form>
+                )}
+              </>
             )}
           </div>
         </div>
