@@ -51,18 +51,56 @@ const PAYSTACK_PUBLIC_KEY = "pk_live_4f604b2d9d9689f50eba439e704600844f7dfd01";
 const ADSENSE_CLIENT_ID = "ca-pub-9204985294084444";
 const ADSENSE_UNIT_SLOT_ID = "3277719159";
 
-// Updated Master Admin Password
 const ADMIN_MASTER_PIN = "Amophanty//:betty?";
 
 const TOTAL_NODES = 1000000;
 const NODES_PER_SECTOR = 100;
-const TOTAL_SECTORS = TOTAL_NODES / NODES_PER_SECTOR; // 10,000 Sectors
-const NODE_PRICE = 100; // ₦100 per Golden Node
-const REFERRAL_REWARD_AMOUNT = 50; // ₦50 credited once referred user plays with Main Wallet
+const TOTAL_SECTORS = TOTAL_NODES / NODES_PER_SECTOR;
+const NODE_PRICE = 100;
+const REFERRAL_REWARD_AMOUNT = 50;
+const STREAK_TARGET_NODES = 5;
+const STREAK_BONUS_REWARD = 100;
+
+export interface SiteAdConfig {
+  slot_position: "top" | "bottom";
+  ad_mode: "adsense" | "custom";
+  adsense_client: string;
+  adsense_slot: string;
+  custom_html?: string;
+  image_url?: string;
+  target_url?: string;
+  sponsor_label?: string;
+  is_active?: boolean;
+}
+
+const DEFAULT_AD_CONFIGS: Record<"top" | "bottom", SiteAdConfig> = {
+  top: {
+    slot_position: "top",
+    ad_mode: "adsense",
+    adsense_client: ADSENSE_CLIENT_ID,
+    adsense_slot: ADSENSE_UNIT_SLOT_ID,
+    custom_html: "",
+    image_url: "",
+    target_url: "https://www.thepixelvest.com.ng",
+    sponsor_label: "SPONSORED BANNER AD",
+    is_active: true,
+  },
+  bottom: {
+    slot_position: "bottom",
+    ad_mode: "adsense",
+    adsense_client: ADSENSE_CLIENT_ID,
+    adsense_slot: ADSENSE_UNIT_SLOT_ID,
+    custom_html: "",
+    image_url: "",
+    target_url: "https://www.thepixelvest.com.ng",
+    sponsor_label: "SPONSORED PARTNER AD",
+    is_active: true,
+  },
+};
 
 const LIVE_TICKER_MESSAGES = [
   "💎 0901***552 unlocked ₦10,000 Mega Vault on Node #314!",
-  "💎 0803***119 unlocked 5 Nodes & hit ₦5,000 Super Vault!",
+  "💎 0803***119 unlocked 5 Nodes & hit ₦5,000 Super Vault + ₦100 Streak Bonus!",
   "💎 0706***884 unlocked ₦3,000 Gold Vault on Node #14,820!",
   "💎 0814***902 unlocked ₦1,000 Cash Vault on Node #204,115!",
   "💎 0905***337 earned ₦50 Referral Play Bonus from an active player!",
@@ -78,7 +116,7 @@ function makeBrandSvg(
   text: string,
   sub?: string
 ): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 120 120">
     <rect width="120" height="120" rx="22" fill="${bg}"/>
     <text x="60" y="${sub ? "58" : "68"}" text-anchor="middle" fill="${fg}" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="${
     text.length > 6 ? "18" : "24"
@@ -366,7 +404,7 @@ const EMPTY_NODE_ROASTS_AND_QUOTES: string[] = [
   "Otilo! Your ₦100 don go buy gala for traffic! 🌭😂 Pursue am sharp!",
   "This node na 'Ghost Mode'—you tap am, e disappear your hope! 👻🤣",
   "Hustle Wisdom: 'The grid rewards the fearless—never back down from an empty box!' 🛡️",
-  "Nothing dey here o! Even echo dey fear to sound inside this empty vault! 🔇😂",
+  "Nothing dey inside o! Even echo dey fear to sound inside this empty vault! 🔇😂",
   "Quote: 'Winners focus on the prize vault; quitters focus on the empty node!' 🏆",
   "Chai! This node just give you warm handshake and tell you 'Safe journey'! 🤝😭",
   "Even if you pour anointing oil on top this node, na still ₦0 dey inside! 🍾😂",
@@ -389,13 +427,13 @@ const EMPTY_NODE_ROASTS_AND_QUOTES: string[] = [
   "Chai! Your ₦100 just do bungee jump enter abyss! 🪂😭 Catch the next rope!",
   "This node empty pass wallet of man wey just finish traditional wedding! 💍🤣",
   "Street Quote: 'No retreat, no surrender—the Mega Vault belongs to the relentless!' 🦁🔥",
-  "Nothing dey here Chief! Even bacterium no survive inside this dry vault! 🦠😂",
+  "Nothing dey inside Chief! Even bacterium no survive inside this dry vault! 🦠😂",
   "Quote: 'One golden tap can change your whole week—keep unlocking!' 🌟💰",
   "Final Boss Roast #250: Otilo! 😂 Since you don read reach here, the next node you tap get special anointing—go unlock am now! ⚡💎",
 ];
 
 // ============================================================================
-// 3. EXACT 12-TIER PRIZE DISTRIBUTION ENGINE (1,000,000 NODES BIJECTION)
+// 3. UPGRADED 30% WIN-RATE PRIZE ENGINE (300,000 WINNING NODES = ₦22,000,000)
 // ============================================================================
 function getExact12TierNodePrize(nodeId: number): number {
   if (nodeId < 1 || nodeId > TOTAL_NODES) return 0;
@@ -408,19 +446,19 @@ function getExact12TierNodePrize(nodeId: number): number {
     (swapped * BigInt(847297) + BigInt(271828)) % BigInt(1000000)
   );
 
-  if (perm < 15000) return 70; // 1. 15,000 nodes = ₦70
-  if (perm < 15500) return 3000; // 2. 500 nodes = ₦3,000
-  if (perm < 15580) return 5000; // 3. 80 nodes = ₦5,000
-  if (perm < 15680) return 10000; // 4. 100 nodes = ₦10,000
-  if (perm < 18180) return 1000; // 5. 2,500 nodes = ₦1,000
-  if (perm < 48180) return 100; // 6. 30,000 nodes = ₦100
-  if (perm < 93180) return 50; // 7. 45,000 nodes = ₦50
-  if (perm < 138180) return 60; // 8. 45,000 nodes = ₦60
-  if (perm < 158180) return 30; // 9. 20,000 nodes = ₦30
-  if (perm < 173180) return 20; // 10. 15,000 nodes = ₦20
-  if (perm < 188180) return 10; // 11. 15,000 nodes = ₦10
-  if (perm < 193180) return 25; // 12. 5,000 nodes = ₦25
-  return 0; // Remaining 806,820 nodes = ₦0
+  if (perm < 25000) return 70;
+  if (perm < 25600) return 3000;
+  if (perm < 25700) return 5000;
+  if (perm < 25800) return 10000;
+  if (perm < 29000) return 1000;
+  if (perm < 84000) return 100;
+  if (perm < 144000) return 50;
+  if (perm < 194000) return 60;
+  if (perm < 226000) return 30;
+  if (perm < 251000) return 20;
+  if (perm < 280000) return 10;
+  if (perm < 300000) return 25;
+  return 0;
 }
 
 function normalizePhone(phone: string): string {
@@ -432,40 +470,90 @@ function normalizePhone(phone: string): string {
 }
 
 // ============================================================================
-// 4. STRICT HORIZONTAL SMALL GOOGLE ADSENSE BANNER (50PX HEIGHT LOCKED)
+// 4. DYNAMIC AD BANNER ENGINE (ADSENSE CODE OR CLICKABLE SPONSOR IMAGE + LINK)
 // ============================================================================
 function AdSenseBanner({
-  slotId = ADSENSE_UNIT_SLOT_ID,
-  label = "SPONSORED BANNER AD",
+  config,
+  defaultLabel = "SPONSORED BANNER AD",
 }: {
-  slotId?: string;
-  label?: string;
+  config?: SiteAdConfig;
+  defaultLabel?: string;
 }) {
+  const activeConfig = config || DEFAULT_AD_CONFIGS.top;
+  const labelText = activeConfig.sponsor_label || defaultLabel;
+  const isCustomImageMode =
+    activeConfig.ad_mode === "custom" && Boolean(activeConfig.image_url);
+
   useEffect(() => {
-    try {
-      ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-    } catch (err) {}
-  }, []);
+    if (!isCustomImageMode) {
+      try {
+        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push(
+          {}
+        );
+      } catch (err) {}
+    }
+  }, [
+    isCustomImageMode,
+    activeConfig.adsense_client,
+    activeConfig.adsense_slot,
+  ]);
+
+  if (activeConfig.is_active === false) {
+    return null;
+  }
 
   return (
     <div className="pv-ad-box">
-      <div className="pv-ad-label">{label}</div>
+      <div className="pv-ad-label">{labelText}</div>
       <div className="pv-ad-slot">
-        <span className="pv-ad-placeholder">
-          ⚡ Google AdSense • The Pixel Vest Partner Network
-        </span>
-        <ins
-          className="adsbygoogle"
-          style={{
-            display: "inline-block",
-            width: "100%",
-            maxWidth: "380px",
-            height: "50px",
-            maxHeight: "50px",
-          }}
-          data-ad-client={ADSENSE_CLIENT_ID}
-          data-ad-slot={slotId}
-        />
+        {isCustomImageMode ? (
+          <a
+            href={activeConfig.target_url || "https://www.thepixelvest.com.ng"}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "100%",
+              height: "48px",
+              textDecoration: "none",
+              overflow: "hidden",
+              borderRadius: "8px",
+            }}
+          >
+            <img
+              src={activeConfig.image_url}
+              alt={labelText}
+              style={{
+                width: "100%",
+                height: "48px",
+                objectFit: "cover",
+                borderRadius: "8px",
+              }}
+            />
+          </a>
+        ) : (
+          <>
+            <span className="pv-ad-placeholder">
+              ⚡ Google AdSense • The Pixel Vest Partner Network
+            </span>
+            <ins
+              className="adsbygoogle"
+              style={{
+                display: "inline-block",
+                width: "100%",
+                maxWidth: "380px",
+                height: "50px",
+                maxHeight: "50px",
+              }}
+              data-ad-client={
+                activeConfig.adsense_client || ADSENSE_CLIENT_ID
+              }
+              data-ad-slot={activeConfig.adsense_slot || ADSENSE_UNIT_SLOT_ID}
+            />
+          </>
+        )}
       </div>
     </div>
   );
@@ -482,6 +570,8 @@ export default function ThePixelVestMasterApp() {
 
   const [user, setUser] = useState<any>(null);
   const [deviceId, setDeviceId] = useState<string>("");
+  const [streakCount, setStreakCount] = useState<number>(0);
+
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authPhone, setAuthPhone] = useState<string>("");
@@ -497,7 +587,9 @@ export default function ThePixelVestMasterApp() {
   );
   const [boardLoading, setBoardLoading] = useState<boolean>(false);
 
-  // MULTI-NODE SELECTION CART + SOLD NODE INSPECTOR
+  const [siteAds, setSiteAds] =
+    useState<Record<"top" | "bottom", SiteAdConfig>>(DEFAULT_AD_CONFIGS);
+
   const [selectedNodes, setSelectedNodes] = useState<number[]>([]);
   const [inspectSoldNode, setInspectSoldNode] = useState<number | null>(null);
   const [walletSource, setWalletSource] = useState<"main" | "bonus">("main");
@@ -505,13 +597,14 @@ export default function ThePixelVestMasterApp() {
   const [rewardResult, setRewardResult] = useState<{
     nodesUnlocked: { nodeId: number; amount: number; brandName: string }[];
     totalAmount: number;
+    streakBonusEarned: number;
     roastIndex: number;
   } | null>(null);
 
   const [showWalletModal, setShowWalletModal] = useState<boolean>(false);
-  const [walletTab, setWalletTab] = useState<"fund" | "withdraw" | "referrals">(
-    "fund"
-  );
+  const [walletTab, setWalletTab] = useState<
+    "fund" | "withdraw" | "dispute" | "referrals"
+  >("fund");
   const [fundAmount, setFundAmount] = useState<string>("500");
   const [paystackConnecting, setPaystackConnecting] = useState<boolean>(false);
   const [pendingTx, setPendingTx] = useState<{
@@ -528,12 +621,17 @@ export default function ThePixelVestMasterApp() {
   const [withdrawPinInput, setWithdrawPinInput] = useState<string>("");
   const [withdrawLoading, setWithdrawLoading] = useState<boolean>(false);
 
-  // Admin Studio States (Edit Node + Credit User + Cash Outs)
+  const [disputeAmount, setDisputeAmount] = useState<string>("500");
+  const [disputeSender, setDisputeSender] = useState<string>("");
+  const [disputeRefNote, setDisputeRefNote] = useState<string>("");
+  const [disputeProofUrl, setDisputeProofUrl] = useState<string>("");
+  const [disputeSubmitting, setDisputeSubmitting] = useState<boolean>(false);
+
   const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(false);
   const [showAdminModal, setShowAdminModal] = useState<boolean>(false);
-  const [adminTab, setAdminTab] = useState<"node" | "wallet" | "withdrawals">(
-    "node"
-  );
+  const [adminTab, setAdminTab] = useState<
+    "node" | "wallet" | "withdrawals" | "disputes" | "ads"
+  >("node");
   const [adminPinInput, setAdminPinInput] = useState<string>("");
   const [adminCreditPhone, setAdminCreditPhone] = useState<string>("");
   const [adminCreditAmount, setAdminCreditAmount] = useState<string>("500");
@@ -544,6 +642,26 @@ export default function ThePixelVestMasterApp() {
 
   const [withdrawalsList, setWithdrawalsList] = useState<any[]>([]);
   const [loadingWithdrawals, setLoadingWithdrawals] = useState<boolean>(false);
+
+  const [disputesList, setDisputesList] = useState<any[]>([]);
+  const [initiatedDepositsList, setInitiatedDepositsList] = useState<any[]>([]);
+  const [loadingDisputes, setLoadingDisputes] = useState<boolean>(false);
+
+  const [adminAdSlotPos, setAdminAdSlotPos] = useState<"top" | "bottom">("top");
+  const [adminAdMode, setAdminAdMode] = useState<"adsense" | "custom">(
+    "adsense"
+  );
+  const [adminAdClientId, setAdminAdClientId] =
+    useState<string>(ADSENSE_CLIENT_ID);
+  const [adminAdSlotId, setAdminAdSlotId] =
+    useState<string>(ADSENSE_UNIT_SLOT_ID);
+  const [adminAdCustomHtml, setAdminAdCustomHtml] = useState<string>("");
+  const [adminAdImageUrl, setAdminAdImageUrl] = useState<string>("");
+  const [adminAdTargetUrl, setAdminAdTargetUrl] = useState<string>("https://");
+  const [adminAdLabel, setAdminAdLabel] = useState<string>(
+    "SPONSORED BANNER AD"
+  );
+  const [adminAdSaving, setAdminAdSaving] = useState<boolean>(false);
 
   const [editNodeId, setEditNodeId] = useState<string>("1");
   const [editBrandName, setEditBrandName] = useState<string>("");
@@ -591,6 +709,9 @@ export default function ThePixelVestMasterApp() {
       localStorage.setItem("pixelvest_device_lock", storedDevice);
     }
     setDeviceId(storedDevice);
+
+    const savedStreak = Number(localStorage.getItem("pv_streak_count") || "0");
+    setStreakCount(savedStreak % STREAK_TARGET_NODES);
 
     if (!document.querySelector('link[rel="manifest"]')) {
       const link = document.createElement("link");
@@ -648,7 +769,10 @@ export default function ThePixelVestMasterApp() {
     const savedPending = localStorage.getItem("pv_active_pending_tx");
     if (savedPending) {
       try {
-        setPendingTx(JSON.parse(savedPending));
+        const parsed = JSON.parse(savedPending);
+        setPendingTx(parsed);
+        if (parsed.amount) setDisputeAmount(String(parsed.amount));
+        if (parsed.ref) setDisputeRefNote(String(parsed.ref));
       } catch (e) {}
     }
 
@@ -666,12 +790,20 @@ export default function ThePixelVestMasterApp() {
       } catch (e) {}
     }
 
+    const localAds = localStorage.getItem("pixelvest_site_ads");
+    if (localAds) {
+      try {
+        setSiteAds((prev) => ({ ...prev, ...JSON.parse(localAds) }));
+      } catch (e) {}
+    }
+
     const savedPhone = localStorage.getItem("pixelvest_active_phone");
     if (savedPhone) {
       fetchUserSession(savedPhone);
     }
 
     fetchSectorBoardData(1);
+    fetchSiteAdsConfig();
 
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
@@ -689,9 +821,48 @@ export default function ThePixelVestMasterApp() {
     return Number(u.bonus_balance ?? u.play_bonus ?? 0);
   };
 
-  // ============================================================================
-  // SAFE SESSION FETCH (NEVER OVERWRITES AN UNSYNCED DEPOSIT)
-  // ============================================================================
+  const fetchSiteAdsConfig = async () => {
+    if (!supabase) return;
+    try {
+      const nextAds: Record<"top" | "bottom", SiteAdConfig> = {
+        ...DEFAULT_AD_CONFIGS,
+      };
+
+      const { data: adRows } = await supabase.from("site_ads").select("*");
+      if (adRows && adRows.length > 0) {
+        adRows.forEach((row: any) => {
+          if (row.slot_position === "top" || row.slot_position === "bottom") {
+            const pos: "top" | "bottom" = row.slot_position;
+            nextAds[pos] = { ...nextAds[pos], ...row };
+          }
+        });
+      }
+
+      const { data: backupAdRows } = await supabase
+        .from("node_overrides")
+        .select("*")
+        .in("node_id", [-501, -502]);
+
+      if (backupAdRows && backupAdRows.length > 0) {
+        backupAdRows.forEach((b: any) => {
+          try {
+            const parsed = JSON.parse(b.logo_url || "{}");
+            if (
+              parsed.slot_position === "top" ||
+              parsed.slot_position === "bottom"
+            ) {
+              const pos: "top" | "bottom" = parsed.slot_position;
+              nextAds[pos] = { ...nextAds[pos], ...parsed };
+            }
+          } catch (e) {}
+        });
+      }
+
+      setSiteAds(nextAds);
+      localStorage.setItem("pixelvest_site_ads", JSON.stringify(nextAds));
+    } catch (e) {}
+  };
+
   const fetchUserSession = async (phone: string) => {
     const cleanPhone = normalizePhone(phone);
     const cachedStr = localStorage.getItem(`pv_user_${cleanPhone}`);
@@ -725,17 +896,6 @@ export default function ThePixelVestMasterApp() {
           if (!syncErr) {
             localStorage.removeItem(`pv_unsynced_add_${cleanPhone}`);
           }
-        } else if (
-          cachedUser &&
-          Number(cachedUser.wallet_balance ?? 0) >
-            Number(data.wallet_balance ?? 0)
-        ) {
-          const higherBal = Number(cachedUser.wallet_balance);
-          finalUser.wallet_balance = higherBal;
-          await supabase
-            .from("users")
-            .update({ wallet_balance: higherBal })
-            .eq("phone", cleanPhone);
         }
 
         setUser(finalUser);
@@ -789,9 +949,6 @@ export default function ThePixelVestMasterApp() {
     return true;
   };
 
-  // ============================================================================
-  // ZERO-LOSS PAYSTACK DEPOSIT CREDITING ENGINE (IDEMPOTENT + AUTO-RETRY)
-  // ============================================================================
   const creditWalletFromPaystack = async (
     rawPhone: string,
     amountNaira: number,
@@ -888,15 +1045,18 @@ export default function ThePixelVestMasterApp() {
               JSON.stringify(syncedObj)
             );
 
-            await supabase.from("transactions").insert([
-              {
-                user_phone: cleanPhone,
-                type: "deposit",
-                amount: amountNaira,
-                status: "completed",
-                reference: txRef,
-              },
-            ]);
+            await supabase.from("transactions").upsert(
+              [
+                {
+                  user_phone: cleanPhone,
+                  type: "deposit",
+                  amount: amountNaira,
+                  status: "completed",
+                  reference: txRef,
+                },
+              ],
+              { onConflict: "reference" }
+            );
             break;
           }
         } catch (err) {
@@ -906,9 +1066,6 @@ export default function ThePixelVestMasterApp() {
     }
   };
 
-  // ============================================================================
-  // BULLETPROOF 3-LAYER DATABASE + LOCAL SOLD NODE & OVERRIDE SYNC
-  // ============================================================================
   const persistNodeLockToDatabase = async (
     nodeId: number,
     soldRecord: Record<string, any>
@@ -1209,7 +1366,7 @@ export default function ThePixelVestMasterApp() {
         );
         setShowAuthModal(false);
         showToast(
-          "Account created successfully! Welcome to The Pixel Vest.",
+          "Account created! Unlock 5 nodes to claim your ₦100 Streak Bonus!",
           "success"
         );
       }
@@ -1221,9 +1378,6 @@ export default function ThePixelVestMasterApp() {
     }
   };
 
-  // ============================================================================
-  // TOGGLE NODE IN MULTI-SELECT CART (OR INSPECT IF SOLD)
-  // ============================================================================
   const handleNodeCardClick = (nodeId: number) => {
     const isSold = Boolean(soldNodesMap[nodeId]?.is_sold);
     if (isSold) {
@@ -1240,9 +1394,6 @@ export default function ThePixelVestMasterApp() {
     });
   };
 
-  // ============================================================================
-  // BATCH UNLOCK MULTIPLE SELECTED NODES AT ONCE
-  // ============================================================================
   const handleUnlockSelectedNodes = async () => {
     const activeNodes = selectedNodes.filter(
       (id) => !soldNodesMap[id]?.is_sold
@@ -1286,7 +1437,6 @@ export default function ThePixelVestMasterApp() {
     setUnlockLoading(true);
 
     try {
-      // Live check in Supabase to ensure none of the selected nodes were just taken
       let validNodesToUnlock = [...activeNodes];
       if (supabase) {
         const { data: liveSoldRows } = await supabase
@@ -1379,12 +1529,22 @@ export default function ThePixelVestMasterApp() {
         await persistNodeLockToDatabase(nodeId, soldRecord);
       }
 
+      const prevStreak = streakCount;
+      const totalProgress = prevStreak + validNodesToUnlock.length;
+      const completedStreaks = Math.floor(totalProgress / STREAK_TARGET_NODES);
+      const newStreakMod = totalProgress % STREAK_TARGET_NODES;
+      const streakBonusEarned = completedStreaks * STREAK_BONUS_REWARD;
+
+      setStreakCount(newStreakMod);
+      localStorage.setItem("pv_streak_count", String(newStreakMod));
+
       const updatedMain =
         walletSource === "main"
           ? mainBal - finalCost + totalPrizeWon
           : mainBal + totalPrizeWon;
       const updatedBonus =
-        walletSource === "bonus" ? bonusBal - finalCost : bonusBal;
+        (walletSource === "bonus" ? bonusBal - finalCost : bonusBal) +
+        streakBonusEarned;
 
       const referrerPhone = user.referred_by
         ? normalizePhone(String(user.referred_by))
@@ -1437,6 +1597,7 @@ export default function ThePixelVestMasterApp() {
       setRewardResult({
         nodesUnlocked: unlockedBreakdown,
         totalAmount: totalPrizeWon,
+        streakBonusEarned,
         roastIndex: randomRoastIdx,
       });
     } catch (err) {
@@ -1447,10 +1608,7 @@ export default function ThePixelVestMasterApp() {
     }
   };
 
-  // ============================================================================
-  // BULLETPROOF PAYSTACK LIVE CHECKOUT (CREDITS EVEN IF BANK TRANSFER STUCK)
-  // ============================================================================
-  const handleFundWithPaystack = () => {
+  const handleFundWithPaystack = async () => {
     if (!user) {
       setShowWalletModal(false);
       setShowAuthModal(true);
@@ -1461,6 +1619,26 @@ export default function ThePixelVestMasterApp() {
     if (isNaN(amountNaira) || amountNaira < 100) {
       showToast("Minimum deposit is ₦100.", "error");
       return;
+    }
+
+    const cleanPhone = normalizePhone(user.phone);
+    const txRef = `PV_${cleanPhone}_${Date.now()}`;
+
+    if (supabase) {
+      try {
+        await supabase.from("transactions").upsert(
+          [
+            {
+              user_phone: cleanPhone,
+              type: "deposit_initiated",
+              amount: amountNaira,
+              status: "initiated",
+              reference: txRef,
+            },
+          ],
+          { onConflict: "reference" }
+        );
+      } catch (e) {}
     }
 
     const openPaystackModalNow = () => {
@@ -1474,9 +1652,6 @@ export default function ThePixelVestMasterApp() {
         return;
       }
 
-      const cleanPhone = normalizePhone(user.phone);
-      const txRef = `PV_${cleanPhone}_${Date.now()}`;
-
       const newPending = {
         ref: txRef,
         amount: amountNaira,
@@ -1484,6 +1659,8 @@ export default function ThePixelVestMasterApp() {
         time: Date.now(),
       };
       setPendingTx(newPending);
+      setDisputeAmount(String(amountNaira));
+      setDisputeRefNote(txRef);
       localStorage.setItem("pv_active_pending_tx", JSON.stringify(newPending));
 
       const handler = PaystackPop.setup({
@@ -1512,7 +1689,7 @@ export default function ThePixelVestMasterApp() {
         onClose: function () {
           fetchUserSession(cleanPhone);
           showToast(
-            "If you completed a transfer, tap 'Sync Wallet' below.",
+            "Sent money but window closed? Open 'Dispute' tab to claim your deposit!",
             "info"
           );
         },
@@ -1581,8 +1758,24 @@ export default function ThePixelVestMasterApp() {
       const newMain = mainBal - amt;
       await updateUserRecord(cleanPhone, { wallet_balance: newMain });
 
+      const withdrawalObj = {
+        user_phone: cleanPhone,
+        amount: amt,
+        bank_name: bankName.trim(),
+        account_number: accountNumber.trim(),
+        account_name: accountName.trim(),
+        status: "pending",
+        created_at: new Date().toISOString(),
+      };
+
+      const localW = JSON.parse(
+        localStorage.getItem("pv_local_withdrawals") || "[]"
+      );
+      localW.unshift({ ...withdrawalObj, id: `LW_${Date.now()}` });
+      localStorage.setItem("pv_local_withdrawals", JSON.stringify(localW));
+
       if (supabase) {
-        await supabase.from("withdrawals").insert([
+        const { error: wErr } = await supabase.from("withdrawals").insert([
           {
             user_phone: cleanPhone,
             amount: amt,
@@ -1592,13 +1785,36 @@ export default function ThePixelVestMasterApp() {
             status: "pending",
           },
         ]);
+
+        if (wErr) {
+          await supabase.from("withdrawals").insert([
+            {
+              user_phone: cleanPhone,
+              amount: amt,
+              bank_name: `${bankName.trim()} - ${accountNumber.trim()} (${accountName.trim()})`,
+            },
+          ]);
+        }
+
+        const backupId = -1000000 - (Math.floor(Date.now() / 1000) % 900000);
+        await supabase.from("node_overrides").upsert([
+          {
+            node_id: backupId,
+            brand_name: "WITHDRAWAL_REQ",
+            logo_url: JSON.stringify({
+              backup_id: backupId,
+              ...withdrawalObj,
+            }),
+            custom_prize: amt,
+          },
+        ]);
       }
 
       setShowWalletModal(false);
       setWithdrawAmount("");
       setWithdrawPinInput("");
       showToast(
-        `₦${amt.toLocaleString()} Cash Out submitted! Processing to ${bankName}.`,
+        `✅ ₦${amt.toLocaleString()} Cash Out submitted! Processing to ${bankName}.`,
         "success"
       );
     } catch (err) {
@@ -1608,37 +1824,358 @@ export default function ThePixelVestMasterApp() {
     }
   };
 
-  // ============================================================================
-  // ADMIN STUDIO: 1-CLICK PLAYER WALLET TOP-UP, NODE EDITOR & CASH OUTS
-  // ============================================================================
-  const fetchAdminWithdrawals = async () => {
-    if (!supabase) return;
-    setLoadingWithdrawals(true);
+  const handleDisputeProofUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_SIZE = 320;
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+        const compressedDataUrl = canvas.toDataURL("image/webp", 0.8);
+        setDisputeProofUrl(compressedDataUrl);
+        showToast("Receipt screenshot attached!", "success");
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmitPaymentDispute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      setShowWalletModal(false);
+      setShowAuthModal(true);
+      return;
+    }
+
+    const amt = Number(disputeAmount);
+    if (isNaN(amt) || amt < 100) {
+      showToast("Enter the valid amount you transferred (Min ₦100).", "error");
+      return;
+    }
+    if (!disputeSender.trim()) {
+      showToast(
+        "Please enter Sender Name & Bank (e.g. OPay / PalmPay).",
+        "error"
+      );
+      return;
+    }
+
+    setDisputeSubmitting(true);
     try {
-      const { data } = await supabase
-        .from("withdrawals")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50);
-      if (data) setWithdrawalsList(data);
+      const cleanPhone = normalizePhone(user.phone);
+      const disputeRecord = {
+        user_phone: cleanPhone,
+        user_name: user.full_name || cleanPhone,
+        amount: amt,
+        sender_info: disputeSender.trim(),
+        reference_note:
+          disputeRefNote.trim() || pendingTx?.ref || "Bank Transfer",
+        proof_url: disputeProofUrl || null,
+        status: "pending",
+        created_at: new Date().toISOString(),
+      };
+
+      const localD = JSON.parse(
+        localStorage.getItem("pv_local_disputes") || "[]"
+      );
+      localD.unshift({ ...disputeRecord, id: `LD_${Date.now()}` });
+      localStorage.setItem("pv_local_disputes", JSON.stringify(localD));
+
+      if (supabase) {
+        await supabase.from("payment_disputes").insert([disputeRecord]);
+
+        const backupDisputeId =
+          -2000000 - (Math.floor(Date.now() / 1000) % 900000);
+        await supabase.from("node_overrides").upsert([
+          {
+            node_id: backupDisputeId,
+            brand_name: "PAYMENT_DISPUTE",
+            logo_url: JSON.stringify({
+              backup_id: backupDisputeId,
+              ...disputeRecord,
+            }),
+            custom_prize: amt,
+          },
+        ]);
+      }
+
+      setDisputeSender("");
+      setDisputeRefNote("");
+      setDisputeProofUrl("");
+      setShowWalletModal(false);
+      showToast(
+        "✅ Payment Dispute received! Admin will verify & credit your wallet shortly.",
+        "success"
+      );
+    } catch (err) {
+      showToast("Dispute submitted! Admin notified.", "success");
+    } finally {
+      setDisputeSubmitting(false);
+    }
+  }; const fetchAdminWithdrawals = async () => {
+    setLoadingWithdrawals(true);
+    const combined: any[] = [];
+    const seenKeys = new Set<string>();
+
+    try {
+      if (supabase) {
+        const { data: wRows } = await supabase
+          .from("withdrawals")
+          .select("*")
+          .limit(100);
+
+        if (wRows && wRows.length > 0) {
+          wRows.forEach((r: any) => {
+            const key = `${r.user_phone}_${r.amount}_${r.account_number}`;
+            seenKeys.add(key);
+            combined.push(r);
+          });
+        }
+
+        const { data: backupRows } = await supabase
+          .from("node_overrides")
+          .select("*")
+          .lte("node_id", -1000000)
+          .gte("node_id", -1999999);
+
+        if (backupRows && backupRows.length > 0) {
+          backupRows.forEach((b: any) => {
+            try {
+              const parsed = JSON.parse(b.logo_url || "{}");
+              const key = `${parsed.user_phone}_${parsed.amount}_${parsed.account_number}`;
+              if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                combined.push({ ...parsed, backup_node_id: b.node_id });
+              }
+            } catch (e) {}
+          });
+        }
+      }
+
+      const localW = JSON.parse(
+        localStorage.getItem("pv_local_withdrawals") || "[]"
+      );
+      localW.forEach((lw: any) => {
+        const key = `${lw.user_phone}_${lw.amount}_${lw.account_number}`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          combined.push(lw);
+        }
+      });
+
+      combined.sort((a, b) => {
+        const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return tB - tA;
+      });
+
+      setWithdrawalsList(combined);
     } catch (e) {}
     setLoadingWithdrawals(false);
   };
 
   const markWithdrawalPaid = async (row: any) => {
-    if (!supabase) return;
-    const matchKey = row.id
-      ? { id: row.id }
-      : { user_phone: row.user_phone, amount: row.amount };
-    await supabase
-      .from("withdrawals")
-      .update({ status: "paid" })
-      .match(matchKey);
-    showToast(
-      `Marked ₦${Number(row.amount || 0).toLocaleString()} as PAID!`,
-      "success"
-    );
-    fetchAdminWithdrawals();
+    try {
+      if (supabase) {
+        if (row.id && !String(row.id).startsWith("LW_")) {
+          await supabase
+            .from("withdrawals")
+            .update({ status: "paid" })
+            .eq("id", row.id);
+        } else {
+          await supabase
+            .from("withdrawals")
+            .update({ status: "paid" })
+            .match({ user_phone: row.user_phone, amount: row.amount });
+        }
+
+        if (row.backup_node_id || row.backup_id) {
+          const bId = row.backup_node_id || row.backup_id;
+          const updatedJson = JSON.stringify({ ...row, status: "paid" });
+          await supabase
+            .from("node_overrides")
+            .update({ logo_url: updatedJson })
+            .eq("node_id", bId);
+        }
+      }
+
+      const localW = JSON.parse(
+        localStorage.getItem("pv_local_withdrawals") || "[]"
+      ).map((item: any) =>
+        item.user_phone === row.user_phone && item.amount === row.amount
+          ? { ...item, status: "paid" }
+          : item
+      );
+      localStorage.setItem("pv_local_withdrawals", JSON.stringify(localW));
+
+      showToast(
+        `✅ Marked ₦${Number(row.amount || 0).toLocaleString()} as PAID!`,
+        "success"
+      );
+      fetchAdminWithdrawals();
+    } catch (e) {}
+  };
+
+  const fetchAdminDisputes = async () => {
+    setLoadingDisputes(true);
+    const combined: any[] = [];
+    const seenKeys = new Set<string>();
+
+    try {
+      if (supabase) {
+        const { data: dRows } = await supabase
+          .from("payment_disputes")
+          .select("*")
+          .limit(100);
+
+        if (dRows && dRows.length > 0) {
+          dRows.forEach((r: any) => {
+            const key = `${r.user_phone}_${r.amount}_${r.sender_info}`;
+            seenKeys.add(key);
+            combined.push(r);
+          });
+        }
+
+        const { data: backupRows } = await supabase
+          .from("node_overrides")
+          .select("*")
+          .lte("node_id", -2000000)
+          .gte("node_id", -2999999);
+
+        if (backupRows && backupRows.length > 0) {
+          backupRows.forEach((b: any) => {
+            try {
+              const parsed = JSON.parse(b.logo_url || "{}");
+              const key = `${parsed.user_phone}_${parsed.amount}_${parsed.sender_info}`;
+              if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                combined.push({ ...parsed, backup_node_id: b.node_id });
+              }
+            } catch (e) {}
+          });
+        }
+
+        const { data: txRows } = await supabase
+          .from("transactions")
+          .select("*")
+          .eq("status", "initiated")
+          .limit(50);
+
+        if (txRows && txRows.length > 0) {
+          setInitiatedDepositsList(txRows);
+        }
+      }
+
+      const localD = JSON.parse(
+        localStorage.getItem("pv_local_disputes") || "[]"
+      );
+      localD.forEach((ld: any) => {
+        const key = `${ld.user_phone}_${ld.amount}_${ld.sender_info}`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          combined.push(ld);
+        }
+      });
+
+      combined.sort((a, b) => {
+        const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return tB - tA;
+      });
+
+      setDisputesList(combined);
+    } catch (e) {}
+    setLoadingDisputes(false);
+  };
+
+  const handleResolveDispute = async (
+    dispute: any,
+    action: "approved" | "rejected"
+  ) => {
+    try {
+      const targetPhone = normalizePhone(dispute.user_phone || "");
+      const amt = Number(dispute.amount || 0);
+
+      if (action === "approved" && targetPhone && amt > 0 && supabase) {
+        const { data: targetUser } = await supabase
+          .from("users")
+          .select("wallet_balance")
+          .eq("phone", targetPhone)
+          .maybeSingle();
+
+        const currentBal = Number(targetUser?.wallet_balance ?? 0);
+        await supabase
+          .from("users")
+          .update({ wallet_balance: currentBal + amt })
+          .eq("phone", targetPhone);
+
+        if (user && normalizePhone(user.phone) === targetPhone) {
+          fetchUserSession(targetPhone);
+        }
+      }
+
+      if (supabase) {
+        if (dispute.id && !String(dispute.id).startsWith("LD_")) {
+          await supabase
+            .from("payment_disputes")
+            .update({ status: action })
+            .eq("id", dispute.id);
+        } else {
+          await supabase
+            .from("payment_disputes")
+            .update({ status: action })
+            .match({ user_phone: dispute.user_phone, amount: dispute.amount });
+        }
+
+        if (dispute.backup_node_id || dispute.backup_id) {
+          const bId = dispute.backup_node_id || dispute.backup_id;
+          const updatedJson = JSON.stringify({ ...dispute, status: action });
+          await supabase
+            .from("node_overrides")
+            .update({ logo_url: updatedJson })
+            .eq("node_id", bId);
+        }
+      }
+
+      const localD = JSON.parse(
+        localStorage.getItem("pv_local_disputes") || "[]"
+      ).map((item: any) =>
+        item.user_phone === dispute.user_phone && item.amount === dispute.amount
+          ? { ...item, status: action }
+          : item
+      );
+      localStorage.setItem("pv_local_disputes", JSON.stringify(localD));
+
+      showToast(
+        action === "approved"
+          ? `✅ Approved! ₦${amt.toLocaleString()} credited to ${targetPhone}'s Main Wallet!`
+          : `Dispute marked as Rejected.`,
+        action === "approved" ? "success" : "info"
+      );
+      fetchAdminDisputes();
+    } catch (e) {
+      showToast("Error updating dispute.", "error");
+    }
   };
 
   const handleAdminCreditPlayer = async (e: React.FormEvent) => {
@@ -1749,7 +2286,7 @@ export default function ThePixelVestMasterApp() {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const MAX_SIZE = 160;
+        const MAX_SIZE = 240;
         let width = img.width;
         let height = img.height;
         if (width > height) {
@@ -1767,13 +2304,75 @@ export default function ThePixelVestMasterApp() {
         canvas.height = height;
         const ctx = canvas.getContext("2d");
         ctx?.drawImage(img, 0, 0, width, height);
-        const compressedDataUrl = canvas.toDataURL("image/webp", 0.85);
+        const compressedDataUrl = canvas.toDataURL("image/webp", 0.88);
         setEditLogoUrl(compressedDataUrl);
-        showToast("Picture uploaded and optimized for Node!", "success");
+        showToast("High-res picture uploaded for Node!", "success");
       };
       img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleAdminLoadAdSlot = (slot: "top" | "bottom") => {
+    setAdminAdSlotPos(slot);
+    const cfg = siteAds[slot] || DEFAULT_AD_CONFIGS[slot];
+    setAdminAdMode(cfg.ad_mode || "adsense");
+    setAdminAdClientId(cfg.adsense_client || ADSENSE_CLIENT_ID);
+    setAdminAdSlotId(cfg.adsense_slot || ADSENSE_UNIT_SLOT_ID);
+    setAdminAdCustomHtml(cfg.custom_html || "");
+    setAdminAdImageUrl(cfg.image_url || "");
+    setAdminAdTargetUrl(cfg.target_url || "https://");
+    setAdminAdLabel(cfg.sponsor_label || "SPONSORED BANNER AD");
+  };
+
+  const handleAdminSaveAdConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminAdSaving(true);
+
+    const payload: SiteAdConfig = {
+      slot_position: adminAdSlotPos,
+      ad_mode: adminAdMode,
+      adsense_client: adminAdClientId.trim() || ADSENSE_CLIENT_ID,
+      adsense_slot: adminAdSlotId.trim() || ADSENSE_UNIT_SLOT_ID,
+      custom_html: adminAdCustomHtml.trim(),
+      image_url: adminAdImageUrl.trim(),
+      target_url: adminAdTargetUrl.trim(),
+      sponsor_label: adminAdLabel.trim() || "SPONSORED BANNER AD",
+      is_active: true,
+    };
+
+    try {
+      const updatedSiteAds = { ...siteAds, [adminAdSlotPos]: payload };
+      setSiteAds(updatedSiteAds);
+      localStorage.setItem("pixelvest_site_ads", JSON.stringify(updatedSiteAds));
+
+      if (supabase) {
+        await supabase
+          .from("site_ads")
+          .upsert([payload], { onConflict: "slot_position" });
+
+        const backupNodeId = adminAdSlotPos === "top" ? -501 : -502;
+        await supabase.from("node_overrides").upsert([
+          {
+            node_id: backupNodeId,
+            brand_name: "SITE_AD_CONFIG",
+            logo_url: JSON.stringify(payload),
+            custom_prize: 0,
+          },
+        ]);
+      }
+
+      showToast(
+        `✅ ${
+          adminAdSlotPos === "top" ? "Top" : "Bottom"
+        } Ad slot updated successfully!`,
+        "success"
+      );
+    } catch (e) {
+      showToast("Ad slot saved locally!", "success");
+    } finally {
+      setAdminAdSaving(false);
+    }
   };
 
   const handleSaveNodeOverride = async (e: React.FormEvent) => {
@@ -1799,10 +2398,7 @@ export default function ThePixelVestMasterApp() {
     };
 
     try {
-      const updatedMap = {
-        ...nodeOverridesMap,
-        [idNum]: payload,
-      };
+      const updatedMap = { ...nodeOverridesMap, [idNum]: payload };
       setNodeOverridesMap(updatedMap);
       localStorage.setItem(
         "pixelvest_node_overrides",
@@ -1851,9 +2447,6 @@ export default function ThePixelVestMasterApp() {
     fetchSectorBoardData(clamped);
   };
 
-  // ============================================================================
-  // SEARCH NODE -> JUMP TO PAGE, SMOOTH SCROLL, HIGHLIGHT & ADD TO SELECTION
-  // ============================================================================
   const handleJumpToNode = () => {
     const cleanNum = parseInt(searchNodeInput.replace(/,/g, ""), 10);
     if (isNaN(cleanNum) || cleanNum < 1 || cleanNum > TOTAL_NODES) {
@@ -1865,7 +2458,6 @@ export default function ThePixelVestMasterApp() {
     changeSector(targetSec);
     setHighlightedNode(cleanNum);
 
-    // If the searched node is available, automatically add it to selection so user can select more & checkout!
     if (!soldNodesMap[cleanNum]?.is_sold) {
       setSelectedNodes((prev) =>
         prev.includes(cleanNum) ? prev : [...prev, cleanNum]
@@ -1893,9 +2485,6 @@ export default function ThePixelVestMasterApp() {
     }, 7000);
   };
 
-  // ============================================================================
-  // DIRECT APP INSTALL & DOWNLOAD ENGINE
-  // ============================================================================
   const handleInstallApp = async () => {
     const promptEvent =
       deferredPrompt ||
@@ -1981,590 +2570,97 @@ export default function ThePixelVestMasterApp() {
   const startNodeNum = (currentSector - 1) * NODES_PER_SECTOR + 1;
   const endNodeNum = currentSector * NODES_PER_SECTOR;
 
-  // ============================================================================
-  // 6. RENDER UI WITH 100% EMBEDDED MASTER CSS
-  // ============================================================================
   return (
     <div className="pv-root">
       <style>{`
-        * {
-          box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
         html, body, .pv-root {
-          margin: 0;
-          padding: 0;
+          margin: 0; padding: 0;
           background-color: #07090e !important;
           color: #ffffff !important;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
           -webkit-font-smoothing: antialiased;
           min-height: 100vh;
         }
-        .pv-container {
-          max-width: 440px;
-          margin: 0 auto;
-          padding: 12px 14px 190px 14px;
-        }
-        .pv-ticker {
-          background-color: #082016;
-          border: 1px solid rgba(16, 185, 129, 0.45);
-          border-radius: 12px;
-          padding: 10px 12px;
-          margin-bottom: 14px;
-          text-align: center;
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-        }
-        .pv-ticker-text {
-          margin: 0;
-          color: #fbbf24 !important;
-          font-weight: 800;
-          font-size: 13px;
-          line-height: 1.35;
-        }
-        .pv-header-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 8px;
-          margin-bottom: 6px;
-        }
-        .pv-brand-wrap {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .pv-brand-title {
-          margin: 0;
-          font-size: 21px;
-          font-weight: 900;
-          letter-spacing: 0.4px;
-          color: #10b981 !important;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .pv-triangle {
-          color: #fbbf24 !important;
-          font-size: 19px;
-        }
-        .pv-install-btn {
-          background-color: #10b981 !important;
-          border: 1px solid #34d399 !important;
-          color: #000000 !important;
-          font-weight: 900;
-          font-size: 11px;
-          padding: 8px 12px;
-          border-radius: 9px;
-          cursor: pointer;
-          white-space: nowrap;
-          box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-        }
-        .pv-subtitle {
-          margin: 0 0 12px 0;
-          color: #9ca3af !important;
-          font-size: 13px;
-          line-height: 1.4;
-        }
-        .pv-wallets-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-          margin-bottom: 12px;
-        }
-        .pv-wallet-main {
-          background-color: #081e17;
-          border: 1px solid rgba(16, 185, 129, 0.55);
-          border-radius: 12px;
-          padding: 11px 13px;
-        }
-        .pv-wallet-bonus {
-          background-color: #211708;
-          border: 1px solid rgba(245, 158, 11, 0.55);
-          border-radius: 12px;
-          padding: 11px 13px;
-        }
-        .pv-wallet-label {
-          margin: 0;
-          font-size: 11px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          color: #9ca3af !important;
-        }
-        .pv-wallet-label-gold {
-          margin: 0;
-          font-size: 11px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          color: #fcd34d !important;
-        }
-        .pv-wallet-val-main {
-          margin: 4px 0 0 0;
-          font-size: 20px;
-          font-weight: 900;
-          color: #10b981 !important;
-        }
-        .pv-wallet-val-bonus {
-          margin: 4px 0 0 0;
-          font-size: 20px;
-          font-weight: 900;
-          color: #fbbf24 !important;
-        }
-        .pv-actions-row {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 14px;
-        }
-        .pv-btn-emerald {
-          background-color: #10b981 !important;
-          color: #000000 !important;
-          font-weight: 900;
-          font-size: 13px;
-          padding: 10px 16px;
-          border-radius: 11px;
-          border: none;
-          cursor: pointer;
-          flex: 1;
-          text-align: center;
-        }
-        .pv-btn-refer {
-          background-color: #211708 !important;
-          color: #fbbf24 !important;
-          border: 1px solid rgba(245, 158, 11, 0.5) !important;
-          font-weight: 800;
-          font-size: 12px;
-          padding: 10px 13px;
-          border-radius: 11px;
-          cursor: pointer;
-        }
-        .pv-btn-logout {
-          background-color: #291216 !important;
-          color: #fda4af !important;
-          border: 1px solid rgba(244, 63, 94, 0.4) !important;
-          font-weight: 800;
-          font-size: 13px;
-          padding: 10px 15px;
-          border-radius: 11px;
-          cursor: pointer;
-        }
-        .pv-divider {
-          border: 0;
-          border-top: 1px solid #1f2430;
-          margin: 12px 0;
-        }
-        .pv-legend {
-          margin-bottom: 12px;
-          font-size: 12px;
-        }
-        .pv-legend-item {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 5px;
-        }
-        .pv-dot-gold {
-          width: 14px;
-          height: 14px;
-          border-radius: 4px;
-          background: linear-gradient(135deg, #fde047, #d97706);
-          border: 1px solid #fef08a;
-          display: inline-block;
-          flex-shrink: 0;
-        }
-        .pv-dot-selected {
-          width: 14px;
-          height: 14px;
-          border-radius: 4px;
-          background: linear-gradient(135deg, #34d399, #059669);
-          border: 2px solid #ffffff;
-          display: inline-block;
-          flex-shrink: 0;
-        }
-        .pv-dot-sold {
-          width: 14px;
-          height: 14px;
-          border-radius: 4px;
-          background-color: #12151e;
-          border: 1px solid #374151;
-          display: inline-block;
-          flex-shrink: 0;
-        }
-        .pv-search-row {
-          display: flex;
-          gap: 8px;
-          margin-bottom: 10px;
-        }
-        .pv-input {
-          flex: 1;
-          background-color: #12151e !important;
-          border: 1px solid #2d3343 !important;
-          color: #ffffff !important;
-          border-radius: 10px;
-          padding: 10px 13px;
-          font-size: 14px;
-          outline: none;
-        }
-        .pv-btn-go {
-          background-color: #10b981 !important;
-          color: #000000 !important;
-          font-weight: 900;
-          font-size: 14px;
-          padding: 10px 18px;
-          border-radius: 10px;
-          border: none;
-          cursor: pointer;
-        }
-        .pv-refresh-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 8px;
-          margin-bottom: 10px;
-        }
-        .pv-btn-dark {
-          background-color: #12151e !important;
-          border: 1px solid #262b38 !important;
-          color: #e5e7eb !important;
-          font-weight: 700;
-          font-size: 12px;
-          padding: 9px 14px;
-          border-radius: 10px;
-          cursor: pointer;
-        }
-        /* STRICT COMPACT HORIZONTAL BANNER AD BOX (LOCKED AT 50PX SLOT HEIGHT) */
-        .pv-ad-box {
-          margin: 10px 0 !important;
-          padding: 5px 8px !important;
-          background-color: #0c0f16 !important;
-          border: 1px solid #1e2433 !important;
-          border-radius: 11px !important;
-          text-align: center !important;
-          height: 68px !important;
-          max-height: 68px !important;
-          min-height: 68px !important;
-          overflow: hidden !important;
-        }
-        .pv-ad-label {
-          font-size: 9px !important;
-          line-height: 11px !important;
-          font-weight: 700 !important;
-          letter-spacing: 1px !important;
-          color: #6b7280 !important;
-          text-transform: uppercase !important;
-          margin-bottom: 3px !important;
-        }
-        .pv-ad-slot {
-          position: relative !important;
-          width: 100% !important;
-          height: 48px !important;
-          max-height: 48px !important;
-          min-height: 48px !important;
-          overflow: hidden !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          background-color: #080a0f !important;
-          border-radius: 8px !important;
-        }
-        .pv-ad-slot ins.adsbygoogle,
-        .pv-ad-slot iframe {
-          height: 48px !important;
-          max-height: 48px !important;
-          min-height: 48px !important;
-          overflow: hidden !important;
-        }
-        .pv-ad-placeholder {
-          position: absolute !important;
-          font-size: 11px !important;
-          font-weight: 700 !important;
-          color: #10b981 !important;
-          opacity: 0.75 !important;
-          pointer-events: none !important;
-          white-space: nowrap !important;
-        }
-        .pv-sector-info {
-          font-size: 13px;
-          color: #9ca3af !important;
-          margin: 0 0 10px 0;
-          line-height: 1.4;
-        }
-        .pv-sector-highlight {
-          color: #fbbf24 !important;
-          font-weight: 800;
-        }
-        .pv-pagination-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 8px;
-          margin-bottom: 14px;
-        }
-        .pv-page-btn {
-          background-color: #12151e !important;
-          border: 1px solid #262b38 !important;
-          color: #ffffff !important;
-          font-weight: 800;
-          font-size: 12px;
-          padding: 8px 14px;
-          border-radius: 11px;
-          cursor: pointer;
-          min-width: 80px;
-          text-align: center;
-          line-height: 1.25;
-        }
-        .pv-page-btn:disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
-        }
-        .pv-sector-jump {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .pv-sector-input {
-          width: 74px;
-          background-color: #12151e !important;
-          border: 1px solid #2d3343 !important;
-          color: #ffffff !important;
-          font-weight: 800;
-          font-size: 13px;
-          padding: 9px 8px;
-          border-radius: 10px;
-          text-align: center;
-        }
-        .pv-sector-btn {
-          background-color: #211708 !important;
-          border: 1px solid #f59e0b !important;
-          color: #fbbf24 !important;
-          font-weight: 800;
-          font-size: 12px;
-          padding: 9px 13px;
-          border-radius: 10px;
-          cursor: pointer;
-        }
-        .pv-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 10px;
-          margin-top: 10px;
-        }
-        .pv-node-card {
-          aspect-ratio: 1 / 1;
-          min-height: 108px;
-          border-radius: 15px;
-          padding: 9px;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          align-items: center;
-          cursor: pointer;
-          transition: transform 0.14s ease, box-shadow 0.14s ease;
-          user-select: none;
-          position: relative;
-        }
-        .pv-node-card:active {
-          transform: scale(0.95);
-        }
-        .pv-node-available {
-          background: linear-gradient(180deg, #fcd34d 0%, #f59e0b 55%, #d97706 100%) !important;
-          border: 1px solid #fef08a !important;
-          box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
-        }
-        .pv-node-selected {
-          background: linear-gradient(180deg, #34d399 0%, #10b981 55%, #059669 100%) !important;
-          border: 2.5px solid #ffffff !important;
-          box-shadow: 0 0 18px rgba(16, 185, 129, 0.75) !important;
-          transform: translateY(-2px);
-        }
-        @keyframes pvPulseGlow {
-          0%, 100% {
-            box-shadow: 0 0 0 3px #00f2fe, 0 0 24px #10b981;
-            transform: scale(1.03);
-          }
-          50% {
-            box-shadow: 0 0 0 6px #fbbf24, 0 0 32px #fbbf24;
-            transform: scale(0.98);
-          }
-        }
-        .pv-node-highlighted {
-          animation: pvPulseGlow 1.1s infinite ease-in-out !important;
-          z-index: 5;
-        }
-        .pv-node-sold {
-          background-color: #12151e !important;
-          border: 1px solid #262b38 !important;
-          opacity: 0.85;
-        }
-        .pv-node-top {
-          width: 100%;
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 3px;
-        }
-        .pv-node-num-avail {
-          font-size: 11px;
-          font-weight: 900;
-          color: #111827 !important;
-        }
-        .pv-node-num-sold {
-          font-size: 11px;
-          font-weight: 900;
-          color: #9ca3af !important;
-        }
-        .pv-node-badge {
-          font-size: 8px;
-          font-weight: 800;
-          padding: 2px 4px;
-          border-radius: 4px;
-          background-color: rgba(0, 0, 0, 0.42);
-          color: #ffffff !important;
-          max-width: 58px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .pv-node-center {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: auto 0;
-        }
-        .pv-node-diamond {
-          font-size: 28px;
-          line-height: 1;
-          filter: drop-shadow(0 2px 3px rgba(0,0,0,0.25));
-        }
-        .pv-node-logo {
-          width: 42px;
-          height: 42px;
-          border-radius: 10px;
-          object-fit: contain;
-          background-color: #ffffff;
-          padding: 2px;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        }
-        .pv-node-price-avail {
-          font-size: 12px;
-          font-weight: 900;
-          color: #111827 !important;
-        }
-        .pv-node-price-selected {
-          font-size: 11px;
-          font-weight: 900;
-          color: #052e16 !important;
-          background-color: rgba(255,255,255,0.85);
-          padding: 2px 6px;
-          border-radius: 5px;
-        }
-        .pv-node-price-sold {
-          font-size: 10px;
-          font-weight: 900;
-          color: #ef4444 !important;
-          letter-spacing: 0.4px;
-        }
-        /* FLOATING MULTI-NODE CART CHECKOUT BAR */
-        .pv-cart-bar {
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          z-index: 9500;
-          background: linear-gradient(180deg, #0d131d 0%, #070a10 100%);
-          border-top: 2px solid #10b981;
-          box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.85);
-          padding: 10px 14px 14px 14px;
-        }
-        .pv-cart-inner {
-          max-width: 440px;
-          margin: 0 auto;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-        .pv-info-card {
-          margin-top: 24px;
-          background-color: #0c0f16;
-          border: 1px solid #1e2433;
-          border-radius: 14px;
-          padding: 14px;
-          font-size: 12px;
-          color: #9ca3af !important;
-          line-height: 1.55;
-        }
-        .pv-info-title {
-          margin: 0 0 8px 0;
-          font-size: 14px;
-          font-weight: 800;
-          color: #ffffff !important;
-        }
-        .pv-footer {
-          margin-top: 24px;
-          padding-top: 18px;
-          border-top: 1px solid #1a1f2c;
-          text-align: center;
-          font-size: 12px;
-          color: #9ca3af !important;
-        }
-        .pv-footer-links {
-          display: flex;
-          justify-content: center;
-          gap: 14px;
-          margin-top: 10px;
-        }
-        .pv-link-btn {
-          background: none !important;
-          border: none !important;
-          color: #9ca3af !important;
-          text-decoration: underline;
-          font-size: 11px;
-          cursor: pointer;
-          padding: 0;
-        }
-        .pv-modal-backdrop {
-          position: fixed;
-          inset: 0;
-          top: 0; left: 0; right: 0; bottom: 0;
-          background-color: rgba(0, 0, 0, 0.84);
-          z-index: 9999;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 16px;
-        }
-        .pv-modal-card {
-          background-color: #12151e;
-          border: 1px solid #2d3343;
-          border-radius: 18px;
-          max-width: 380px;
-          width: 100%;
-          padding: 20px;
-          color: #ffffff !important;
-          max-height: 90vh;
-          overflow-y: auto;
-        }
-        .pv-toast {
-          position: fixed;
-          top: 16px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 10000;
-          background-color: #10b981;
-          color: #000000 !important;
-          font-weight: 900;
-          font-size: 13px;
-          padding: 12px 18px;
-          border-radius: 12px;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.6);
-          max-width: 340px;
-          width: 90%;
-          text-align: center;
-        }
+        .pv-container { max-width: 440px; margin: 0 auto; padding: 12px 14px 190px 14px; }
+        .pv-ticker { background-color: #082016; border: 1px solid rgba(16, 185, 129, 0.45); border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; text-align: center; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); }
+        .pv-ticker-text { margin: 0; color: #fbbf24 !important; font-weight: 800; font-size: 13px; line-height: 1.35; }
+        .pv-header-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+        .pv-brand-wrap { display: flex; align-items: center; gap: 8px; }
+        .pv-brand-title { margin: 0; font-size: 21px; font-weight: 900; letter-spacing: 0.4px; color: #10b981 !important; display: flex; align-items: center; gap: 6px; }
+        .pv-triangle { color: #fbbf24 !important; font-size: 19px; }
+        .pv-install-btn { background-color: #10b981 !important; border: 1px solid #34d399 !important; color: #000000 !important; font-weight: 900; font-size: 11px; padding: 8px 12px; border-radius: 9px; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3); }
+        .pv-subtitle { margin: 0 0 10px 0; color: #9ca3af !important; font-size: 12.5px; line-height: 1.4; }
+        .pv-streak-card { background: linear-gradient(90deg, #161224 0%, #0d1f1a 100%); border: 1px solid rgba(251, 191, 36, 0.45); border-radius: 12px; padding: 9px 12px; margin-bottom: 12px; }
+        .pv-streak-top { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 800; margin-bottom: 6px; }
+        .pv-streak-track { width: 100%; height: 8px; background-color: #090b10; border-radius: 99px; overflow: hidden; border: 1px solid #262b38; }
+        .pv-streak-fill { height: 100%; background: linear-gradient(90deg, #fbbf24, #10b981); border-radius: 99px; transition: width 0.3s ease; }
+        .pv-wallets-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+        .pv-wallet-main { background-color: #081e17; border: 1px solid rgba(16, 185, 129, 0.55); border-radius: 12px; padding: 11px 13px; }
+        .pv-wallet-bonus { background-color: #211708; border: 1px solid rgba(245, 158, 11, 0.55); border-radius: 12px; padding: 11px 13px; }
+        .pv-wallet-label { margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af !important; }
+        .pv-wallet-label-gold { margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #fcd34d !important; }
+        .pv-wallet-val-main { margin: 4px 0 0 0; font-size: 20px; font-weight: 900; color: #10b981 !important; }
+        .pv-wallet-val-bonus { margin: 4px 0 0 0; font-size: 20px; font-weight: 900; color: #fbbf24 !important; }
+        .pv-actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .pv-btn-emerald { background-color: #10b981 !important; color: #000000 !important; font-weight: 900; font-size: 13px; padding: 10px 16px; border-radius: 11px; border: none; cursor: pointer; flex: 1; text-align: center; }
+        .pv-btn-refer { background-color: #211708 !important; color: #fbbf24 !important; border: 1px solid rgba(245, 158, 11, 0.5) !important; font-weight: 800; font-size: 12px; padding: 10px 13px; border-radius: 11px; cursor: pointer; }
+        .pv-btn-logout { background-color: #291216 !important; color: #fda4af !important; border: 1px solid rgba(244, 63, 94, 0.4) !important; font-weight: 800; font-size: 13px; padding: 10px 15px; border-radius: 11px; cursor: pointer; }
+        .pv-dispute-banner { width: 100%; background-color: #1c1317; border: 1px solid rgba(244, 63, 94, 0.45); color: #fda4af !important; border-radius: 10px; padding: 8px 12px; font-size: 11.5px; font-weight: 800; text-align: center; cursor: pointer; margin-bottom: 10px; }
+        .pv-divider { border: 0; border-top: 1px solid #1f2430; margin: 12px 0; }
+        .pv-legend { margin-bottom: 12px; font-size: 12px; }
+        .pv-legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+        .pv-dot-gold { width: 14px; height: 14px; border-radius: 4px; background: linear-gradient(135deg, #fde047, #d97706); border: 1px solid #fef08a; display: inline-block; flex-shrink: 0; }
+        .pv-dot-selected { width: 14px; height: 14px; border-radius: 4px; background: linear-gradient(135deg, #34d399, #059669); border: 2px solid #ffffff; display: inline-block; flex-shrink: 0; }
+        .pv-dot-sold { width: 14px; height: 14px; border-radius: 4px; background-color: #12151e; border: 1px solid #374151; display: inline-block; flex-shrink: 0; }
+        .pv-search-row { display: flex; gap: 8px; margin-bottom: 10px; }
+        .pv-input { flex: 1; background-color: #12151e !important; border: 1px solid #2d3343 !important; color: #ffffff !important; border-radius: 10px; padding: 10px 13px; font-size: 14px; outline: none; }
+        .pv-btn-go { background-color: #10b981 !important; color: #000000 !important; font-weight: 900; font-size: 14px; padding: 10px 18px; border-radius: 10px; border: none; cursor: pointer; }
+        .pv-refresh-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+        .pv-btn-dark { background-color: #12151e !important; border: 1px solid #262b38 !important; color: #e5e7eb !important; font-weight: 700; font-size: 12px; padding: 9px 14px; border-radius: 10px; cursor: pointer; }
+        .pv-ad-box { margin: 10px 0 !important; padding: 5px 8px !important; background-color: #0c0f16 !important; border: 1px solid #1e2433 !important; border-radius: 11px !important; text-align: center !important; height: 68px !important; max-height: 68px !important; min-height: 68px !important; overflow: hidden !important; }
+        .pv-ad-label { font-size: 9px !important; line-height: 11px !important; font-weight: 700 !important; letter-spacing: 1px !important; color: #6b7280 !important; text-transform: uppercase !important; margin-bottom: 3px !important; }
+        .pv-ad-slot { position: relative !important; width: 100% !important; height: 48px !important; max-height: 48px !important; min-height: 48px !important; overflow: hidden !important; display: flex !important; align-items: center !important; justify-content: center !important; background-color: #080a0f !important; border-radius: 8px !important; }
+        .pv-ad-slot ins.adsbygoogle, .pv-ad-slot iframe { height: 48px !important; max-height: 48px !important; min-height: 48px !important; overflow: hidden !important; }
+        .pv-ad-placeholder { position: absolute !important; font-size: 11px !important; font-weight: 700 !important; color: #10b981 !important; opacity: 0.75 !important; pointer-events: none !important; white-space: nowrap !important; }
+        .pv-sector-info { font-size: 13px; color: #9ca3af !important; margin: 0 0 10px 0; line-height: 1.4; }
+        .pv-sector-highlight { color: #fbbf24 !important; font-weight: 800; }
+        .pv-pagination-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+        .pv-page-btn { background-color: #12151e !important; border: 1px solid #262b38 !important; color: #ffffff !important; font-weight: 800; font-size: 12px; padding: 8px 14px; border-radius: 11px; cursor: pointer; min-width: 80px; text-align: center; line-height: 1.25; }
+        .pv-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pv-sector-jump { display: flex; align-items: center; gap: 6px; }
+        .pv-sector-input { width: 74px; background-color: #12151e !important; border: 1px solid #2d3343 !important; color: #ffffff !important; font-weight: 800; font-size: 13px; padding: 9px 8px; border-radius: 10px; text-align: center; }
+        .pv-sector-btn { background-color: #211708 !important; border: 1px solid #f59e0b !important; color: #fbbf24 !important; font-weight: 800; font-size: 12px; padding: 9px 13px; border-radius: 10px; cursor: pointer; }
+        .pv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+        .pv-node-card { aspect-ratio: 1 / 1; min-height: 114px; border-radius: 15px; padding: 7px 8px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; cursor: pointer; transition: transform 0.14s ease, box-shadow 0.14s ease; user-select: none; position: relative; }
+        .pv-node-card:active { transform: scale(0.95); }
+        .pv-node-available { background: linear-gradient(180deg, #fcd34d 0%, #f59e0b 55%, #d97706 100%) !important; border: 1px solid #fef08a !important; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15); }
+        .pv-node-selected { background: linear-gradient(180deg, #34d399 0%, #10b981 55%, #059669 100%) !important; border: 2.5px solid #ffffff !important; box-shadow: 0 0 18px rgba(16, 185, 129, 0.75) !important; transform: translateY(-2px); }
+        @keyframes pvPulseGlow { 0%, 100% { box-shadow: 0 0 0 3px #00f2fe, 0 0 24px #10b981; transform: scale(1.03); } 50% { box-shadow: 0 0 0 6px #fbbf24, 0 0 32px #fbbf24; transform: scale(0.98); } }
+        .pv-node-highlighted { animation: pvPulseGlow 1.1s infinite ease-in-out !important; z-index: 5; }
+        .pv-node-sold { background-color: #12151e !important; border: 1px solid #262b38 !important; opacity: 0.85; }
+        .pv-node-top { width: 100%; display: flex; justify-content: space-between; align-items: flex-start; gap: 3px; }
+        .pv-node-num-avail { font-size: 11px; font-weight: 900; color: #111827 !important; }
+        .pv-node-num-sold { font-size: 11px; font-weight: 900; color: #9ca3af !important; }
+        .pv-node-badge { font-size: 8px; font-weight: 800; padding: 2px 4px; border-radius: 4px; background-color: rgba(0, 0, 0, 0.42); color: #ffffff !important; max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pv-node-center { display: flex; align-items: center; justify-content: center; margin: auto 0; width: 100%; }
+        .pv-node-diamond { font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.25)); }
+        .pv-node-logo { width: 58px; height: 58px; border-radius: 12px; object-fit: cover; background-color: #ffffff; padding: 2px; box-shadow: 0 3px 8px rgba(0,0,0,0.38); }
+        .pv-node-price-avail { font-size: 12px; font-weight: 900; color: #111827 !important; }
+        .pv-node-price-selected { font-size: 11px; font-weight: 900; color: #052e16 !important; background-color: rgba(255,255,255,0.85); padding: 2px 6px; border-radius: 5px; }
+        .pv-node-price-sold { font-size: 10px; font-weight: 900; color: #ef4444 !important; letter-spacing: 0.4px; }
+        .pv-cart-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 9500; background: linear-gradient(180deg, #0d131d 0%, #070a10 100%); border-top: 2px solid #10b981; box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.85); padding: 10px 14px 14px 14px; }
+        .pv-cart-inner { max-width: 440px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+        .pv-info-card { margin-top: 24px; background-color: #0c0f16; border: 1px solid #1e2433; border-radius: 14px; padding: 14px; font-size: 12px; color: #9ca3af !important; line-height: 1.55; }
+        .pv-info-title { margin: 0 0 8px 0; font-size: 14px; font-weight: 800; color: #ffffff !important; }
+        .pv-footer { margin-top: 24px; padding-top: 18px; border-top: 1px solid #1a1f2c; text-align: center; font-size: 12px; color: #9ca3af !important; }
+        .pv-footer-links { display: flex; justify-content: center; gap: 14px; margin-top: 10px; }
+        .pv-link-btn { background: none !important; border: none !important; color: #9ca3af !important; text-decoration: underline; font-size: 11px; cursor: pointer; padding: 0; }
+        .pv-modal-backdrop { position: fixed; inset: 0; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.84); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 16px; }
+        .pv-modal-card { background-color: #12151e; border: 1px solid #2d3343; border-radius: 18px; max-width: 380px; width: 100%; padding: 20px; color: #ffffff !important; max-height: 90vh; overflow-y: auto; }
+        .pv-toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 10000; background-color: #10b981; color: #000000 !important; font-weight: 900; font-size: 13px; padding: 12px 18px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.6); max-width: 340px; width: 90%; text-align: center; }
       `}</style>
 
-      {/* Toast Notification */}
       {toast && (
         <div
           className="pv-toast"
@@ -2583,31 +2679,49 @@ export default function ThePixelVestMasterApp() {
       )}
 
       <div className="pv-container">
-        {/* 1. TOP GREEN PAYOUT TICKER */}
         <div className="pv-ticker">
           <p className="pv-ticker-text">{LIVE_TICKER_MESSAGES[tickerIndex]}</p>
         </div>
 
-        {/* 2. BRAND HEADER + DIRECT APK INSTALL / DOWNLOAD BUTTON */}
         <div className="pv-header-row">
           <div className="pv-brand-wrap">
             <h1 className="pv-brand-title">
               <span className="pv-triangle">▲</span> THE PIXEL VEST
             </h1>
           </div>
-
           <button onClick={handleInstallApp} className="pv-install-btn">
             📲 Download App
           </button>
         </div>
 
-        {/* 3. SUBTITLE */}
         <p className="pv-subtitle">
-          1,000,000 Nodes • ₦22,000,000 Prize Vault • Tap 1 or More Nodes (₦100
-          each)
+          1,000,000 Nodes • ₦22,000,000 Prize Vault (30% Win Rate!) • Tap 1 or
+          More Nodes (₦100)
         </p>
 
-        {/* 4. TWO WALLET BALANCES SIDE-BY-SIDE */}
+        <div className="pv-streak-card">
+          <div className="pv-streak-top">
+            <span style={{ color: "#fbbf24" }}>
+              🔥 Loyalty Streak: {streakCount} / {STREAK_TARGET_NODES} Nodes
+            </span>
+            <span style={{ color: "#10b981" }}>
+              Unlock {STREAK_TARGET_NODES - streakCount} more = +₦100 Free
+              Bonus!
+            </span>
+          </div>
+          <div className="pv-streak-track">
+            <div
+              className="pv-streak-fill"
+              style={{
+                width: `${Math.min(
+                  100,
+                  (streakCount / STREAK_TARGET_NODES) * 100
+                )}%`,
+              }}
+            />
+          </div>
+        </div>
+
         <div className="pv-wallets-grid">
           <div className="pv-wallet-main">
             <p className="pv-wallet-label">MAIN WALLET</p>
@@ -2615,7 +2729,6 @@ export default function ThePixelVestMasterApp() {
               ₦{getMainBalance(user).toLocaleString()}
             </p>
           </div>
-
           <div className="pv-wallet-bonus">
             <p className="pv-wallet-label-gold">PLAY BONUS</p>
             <p className="pv-wallet-val-bonus">
@@ -2624,7 +2737,6 @@ export default function ThePixelVestMasterApp() {
           </div>
         </div>
 
-        {/* 5. ACTION BUTTONS (+ FUND / CASH OUT, REFER, LOGOUT / LOGIN) */}
         <div className="pv-actions-row">
           <button
             onClick={() => {
@@ -2639,11 +2751,9 @@ export default function ThePixelVestMasterApp() {
           >
             + FUND / CASH OUT
           </button>
-
           <button onClick={copyReferralLink} className="pv-btn-refer">
             Refer (+₦50)
           </button>
-
           {user ? (
             <button
               onClick={() => {
@@ -2668,9 +2778,24 @@ export default function ThePixelVestMasterApp() {
           )}
         </div>
 
+        <button
+          type="button"
+          onClick={() => {
+            if (!user) {
+              setShowAuthModal(true);
+            } else {
+              setWalletTab("dispute");
+              setShowWalletModal(true);
+            }
+          }}
+          className="pv-dispute-banner"
+        >
+          🚨 Deposited via Paystack &amp; Not Reflecting? Tap Here to Submit
+          Payment Dispute
+        </button>
+
         <hr className="pv-divider" />
 
-        {/* 6. AVAILABLE, SELECTED & SOLD NODE LEGEND */}
         <div className="pv-legend">
           <div className="pv-legend-item">
             <span className="pv-dot-gold" />
@@ -2692,7 +2817,6 @@ export default function ThePixelVestMasterApp() {
           </div>
         </div>
 
-        {/* 7. NODE SEARCH INPUT + GO (SCROLLS & HIGHLIGHTS NODE ON PAGE) */}
         <div className="pv-search-row">
           <input
             type="number"
@@ -2718,12 +2842,13 @@ export default function ThePixelVestMasterApp() {
           >
             ↻ {boardLoading ? "Refreshing..." : "Refresh Live Board"}
           </button>
-
           <button
             onClick={() => {
               const targetNode =
                 selectedNodes[0] || highlightedNode || startNodeNum;
               handleAdminLoadNode(String(targetNode));
+              fetchAdminWithdrawals();
+              fetchAdminDisputes();
               setShowAdminModal(true);
             }}
             className="pv-sector-btn"
@@ -2732,13 +2857,11 @@ export default function ThePixelVestMasterApp() {
           </button>
         </div>
 
-        {/* 8. COMPACT HORIZONTAL GOOGLE ADSENSE BANNER (50PX LOCKED) */}
         <AdSenseBanner
-          slotId={ADSENSE_UNIT_SLOT_ID}
-          label="SPONSORED BANNER AD"
+          config={siteAds.top}
+          defaultLabel="SPONSORED BANNER AD"
         />
 
-        {/* 9. SECTOR INDICATOR & PAGINATION CONTROLS */}
         <div>
           <p className="pv-sector-info">
             <span className="pv-sector-highlight">
@@ -2759,7 +2882,6 @@ export default function ThePixelVestMasterApp() {
               <br />
               100
             </button>
-
             <div className="pv-sector-jump">
               <input
                 type="number"
@@ -2779,7 +2901,6 @@ export default function ThePixelVestMasterApp() {
                 Sector
               </button>
             </div>
-
             <button
               onClick={() => changeSector(currentSector + 1)}
               disabled={currentSector >= TOTAL_SECTORS}
@@ -2791,7 +2912,6 @@ export default function ThePixelVestMasterApp() {
           </div>
         </div>
 
-        {/* 10. EXACT 3-COLUMN GOLDEN DIAMOND GRID (WITH 10 BRAND LOGOS IN SECTOR 1) */}
         <div className="pv-grid">
           {sectorNodes.map((nodeId) => {
             const soldInfo = soldNodesMap[nodeId];
@@ -2835,7 +2955,6 @@ export default function ThePixelVestMasterApp() {
                     <span className="pv-node-badge">{displayBrand}</span>
                   )}
                 </div>
-
                 <div className="pv-node-center">
                   {displayLogo ? (
                     <img
@@ -2853,7 +2972,6 @@ export default function ThePixelVestMasterApp() {
                     </span>
                   )}
                 </div>
-
                 <div>
                   <span
                     className={
@@ -2876,21 +2994,20 @@ export default function ThePixelVestMasterApp() {
           })}
         </div>
 
-        {/* 11. BOTTOM COMPACT HORIZONTAL GOOGLE ADSENSE BANNER (50PX LOCKED) */}
         <AdSenseBanner
-          slotId={ADSENSE_UNIT_SLOT_ID}
-          label="SPONSORED PARTNER AD"
+          config={siteAds.bottom}
+          defaultLabel="SPONSORED PARTNER AD"
         />
 
-        {/* 12. SEO & GOOGLE ADSENSE RICH CONTENT SECTION */}
         <section className="pv-info-card">
           <h2 className="pv-info-title">
             The Pixel Vest — Nigeria&apos;s 1,000,000 Digital Node Grid
           </h2>
           <p style={{ margin: "0 0 8px 0" }}>
-            Select single or multiple digital nodes for ₦100 each, explore
-            featured brand vaults in Sector #1, and unlock instant cash vault
-            bounties ranging from ₦10 up to ₦10,000 across 10,000 sectors.
+            Select single or multiple digital nodes for ₦100 each, enjoy a 30%
+            instant cash win rate across 300,000 winning vaults, and earn
+            guaranteed <strong>+₦100 Loyalty Streak Bonuses</strong> every 5
+            nodes you unlock!
           </p>
           <p style={{ margin: 0 }}>
             <strong style={{ color: "#fbbf24" }}>
@@ -2903,7 +3020,6 @@ export default function ThePixelVestMasterApp() {
           </p>
         </section>
 
-        {/* 13. INDEPENDENT STUDIO FOOTER */}
         <footer className="pv-footer">
           <p style={{ margin: "0 0 6px 0", fontWeight: 700, color: "#d1d5db" }}>
             © {new Date().getFullYear()} The Pixel Vest • Powered by PixelVest
@@ -2936,6 +3052,8 @@ export default function ThePixelVestMasterApp() {
                 const targetNode =
                   selectedNodes[0] || highlightedNode || startNodeNum;
                 handleAdminLoadNode(String(targetNode));
+                fetchAdminWithdrawals();
+                fetchAdminDisputes();
                 setShowAdminModal(true);
               }}
               className="pv-link-btn"
@@ -2947,9 +3065,6 @@ export default function ThePixelVestMasterApp() {
         </footer>
       </div>
 
-      {/* ==================================================================== */}
-      {/* FLOATING MULTI-NODE SELECTION & BATCH CHECKOUT BAR                   */}
-      {/* ==================================================================== */}
       {selectedNodes.length > 0 && (
         <div className="pv-cart-bar">
           <div className="pv-cart-inner">
@@ -2984,7 +3099,6 @@ export default function ThePixelVestMasterApp() {
                   Nodes: {selectedNodes.map((n) => `#${n}`).join(", ")}
                 </div>
               </div>
-
               <div style={{ display: "flex", gap: 6 }}>
                 {isAdminUnlocked && selectedNodes.length === 1 && (
                   <button
@@ -3033,7 +3147,6 @@ export default function ThePixelVestMasterApp() {
               >
                 Main: ₦{getMainBalance(user).toLocaleString()}
               </button>
-
               <button
                 type="button"
                 onClick={() => setWalletSource("bonus")}
@@ -3081,9 +3194,6 @@ export default function ThePixelVestMasterApp() {
         </div>
       )}
 
-      {/* ==================================================================== */}
-      {/* MODAL 1: SOLD NODE INSPECTOR MODAL                                   */}
-      {/* ==================================================================== */}
       {inspectSoldNode !== null && (
         <div className="pv-modal-backdrop">
           <div className="pv-modal-card" style={{ textAlign: "center" }}>
@@ -3105,10 +3215,10 @@ export default function ThePixelVestMasterApp() {
                 <>
                   <div
                     style={{
-                      width: 64,
-                      height: 64,
+                      width: 84,
+                      height: 84,
                       margin: "0 auto 12px auto",
-                      borderRadius: 16,
+                      borderRadius: 18,
                       backgroundColor: "rgba(239, 68, 68, 0.15)",
                       border: "1px solid rgba(239, 68, 68, 0.45)",
                       display: "flex",
@@ -3121,19 +3231,18 @@ export default function ThePixelVestMasterApp() {
                         src={displayLogo}
                         alt={displayBrand}
                         style={{
-                          width: 52,
-                          height: 52,
-                          objectFit: "contain",
-                          borderRadius: 10,
+                          width: 72,
+                          height: 72,
+                          objectFit: "cover",
+                          borderRadius: 14,
                           backgroundColor: "#fff",
                           padding: 2,
                         }}
                       />
                     ) : (
-                      <span style={{ fontSize: 32 }}>🔒</span>
+                      <span style={{ fontSize: 36 }}>🔒</span>
                     )}
                   </div>
-
                   <h3 style={{ margin: "0 0 4px 0", fontSize: 19, fontWeight: 900 }}>
                     Node #{inspectSoldNode.toLocaleString()}
                   </h3>
@@ -3147,7 +3256,6 @@ export default function ThePixelVestMasterApp() {
                   >
                     {displayBrand}
                   </p>
-
                   <div
                     style={{
                       backgroundColor: "#0c0f16",
@@ -3171,7 +3279,6 @@ export default function ThePixelVestMasterApp() {
                       Unlocked by: {soldInfo?.owner_name || "Player"}
                     </p>
                   </div>
-
                   {isAdminUnlocked && (
                     <button
                       onClick={() => {
@@ -3187,7 +3294,6 @@ export default function ThePixelVestMasterApp() {
                       ⚙️ Admin: Edit or Unlock Node #{inspectSoldNode}
                     </button>
                   )}
-
                   <button
                     onClick={() => setInspectSoldNode(null)}
                     className="pv-btn-dark"
@@ -3202,9 +3308,6 @@ export default function ThePixelVestMasterApp() {
         </div>
       )}
 
-      {/* ==================================================================== */}
-      {/* MODAL 2: MULTI-NODE REWARD RESULT POPUP + 250 ROASTS                 */}
-      {/* ==================================================================== */}
       {rewardResult && (
         <div className="pv-modal-backdrop">
           <div className="pv-modal-card" style={{ textAlign: "center" }}>
@@ -3228,7 +3331,6 @@ export default function ThePixelVestMasterApp() {
                   } Unlocked — Empty Vault!`}
             </h3>
 
-            {/* Per-Node Breakdown List */}
             <div
               style={{
                 backgroundColor: "#0c0f16",
@@ -3266,6 +3368,25 @@ export default function ThePixelVestMasterApp() {
                 </div>
               ))}
             </div>
+
+            {rewardResult.streakBonusEarned > 0 && (
+              <div
+                style={{
+                  backgroundColor: "#211708",
+                  border: "1px solid #fbbf24",
+                  borderRadius: 11,
+                  padding: 10,
+                  marginBottom: 12,
+                  fontSize: 12,
+                  fontWeight: 900,
+                  color: "#fbbf24",
+                }}
+              >
+                🔥 5-NODE STREAK COMPLETED! +₦
+                {rewardResult.streakBonusEarned.toLocaleString()} FREE PLAY
+                BONUS ADDED!
+              </div>
+            )}
 
             {rewardResult.totalAmount > 0 ? (
               <div
@@ -3367,15 +3488,14 @@ export default function ThePixelVestMasterApp() {
             >
               {rewardResult.totalAmount > 0
                 ? "Claim & Continue Playing"
-                : "No Gree! Select More Nodes 🔥"}
+                : `No Gree! (${
+                    STREAK_TARGET_NODES - streakCount
+                  } more for +₦100 Streak Bonus!) 🔥`}
             </button>
           </div>
         </div>
       )}
 
-      {/* ==================================================================== */}
-      {/* MODAL 3: LOGIN & REGISTRATION MODAL                                  */}
-      {/* ==================================================================== */}
       {showAuthModal && (
         <div className="pv-modal-backdrop">
           <div className="pv-modal-card">
@@ -3434,7 +3554,6 @@ export default function ThePixelVestMasterApp() {
                 onChange={(e) => setAuthPhone(e.target.value)}
                 className="pv-input"
               />
-
               {authMode === "register" && (
                 <input
                   type="text"
@@ -3445,7 +3564,6 @@ export default function ThePixelVestMasterApp() {
                   className="pv-input"
                 />
               )}
-
               <input
                 type="password"
                 required
@@ -3454,7 +3572,6 @@ export default function ThePixelVestMasterApp() {
                 onChange={(e) => setAuthPassword(e.target.value)}
                 className="pv-input"
               />
-
               {authMode === "register" && (
                 <>
                   <input
@@ -3475,7 +3592,6 @@ export default function ThePixelVestMasterApp() {
                   />
                 </>
               )}
-
               <button
                 type="submit"
                 disabled={authLoading}
@@ -3493,9 +3609,6 @@ export default function ThePixelVestMasterApp() {
         </div>
       )}
 
-      {/* ==================================================================== */}
-      {/* MODAL 4: WALLET (PAYSTACK DEPOSIT, BANK CASH OUT & REFERRAL CENTER)  */}
-      {/* ==================================================================== */}
       {showWalletModal && (
         <div className="pv-modal-backdrop">
           <div className="pv-modal-card">
@@ -3508,7 +3621,7 @@ export default function ThePixelVestMasterApp() {
               }}
             >
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900 }}>
-                Wallet & Cash Out
+                Wallet, Cash Out &amp; Support
               </h3>
               <button
                 onClick={() => setShowWalletModal(false)}
@@ -3522,8 +3635,8 @@ export default function ThePixelVestMasterApp() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
-                gap: 6,
+                gridTemplateColumns: "1fr 1fr 1fr 1fr",
+                gap: 5,
                 marginBottom: 14,
               }}
             >
@@ -3532,27 +3645,42 @@ export default function ThePixelVestMasterApp() {
                 className={
                   walletTab === "fund" ? "pv-btn-emerald" : "pv-btn-dark"
                 }
-                style={{ padding: "8px 4px", fontSize: 11 }}
+                style={{ padding: "8px 3px", fontSize: 10 }}
               >
-                Fund Wallet
+                Fund
               </button>
               <button
                 onClick={() => setWalletTab("withdraw")}
                 className={
                   walletTab === "withdraw" ? "pv-btn-emerald" : "pv-btn-dark"
                 }
-                style={{ padding: "8px 4px", fontSize: 11 }}
+                style={{ padding: "8px 3px", fontSize: 10 }}
               >
                 Cash Out
+              </button>
+              <button
+                onClick={() => setWalletTab("dispute")}
+                className={
+                  walletTab === "dispute" ? "pv-btn-emerald" : "pv-btn-dark"
+                }
+                style={{
+                  padding: "8px 3px",
+                  fontSize: 10,
+                  borderColor:
+                    walletTab === "dispute" ? "#10b981" : "rgba(244,63,94,0.5)",
+                  color: walletTab === "dispute" ? "#000" : "#fda4af",
+                }}
+              >
+                🚨 Dispute
               </button>
               <button
                 onClick={() => setWalletTab("referrals")}
                 className={
                   walletTab === "referrals" ? "pv-btn-emerald" : "pv-btn-dark"
                 }
-                style={{ padding: "8px 4px", fontSize: 11 }}
+                style={{ padding: "8px 3px", fontSize: 10 }}
               >
-                Refer (+₦50)
+                Refer
               </button>
             </div>
 
@@ -3601,22 +3729,30 @@ export default function ThePixelVestMasterApp() {
                     ? "OPENING PAYSTACK CHECKOUT..."
                     : `PAY ₦${Number(fundAmount || 0).toLocaleString()} WITH PAYSTACK`}
                 </button>
-
                 <button
                   type="button"
                   onClick={() => {
                     if (user?.phone) {
                       fetchUserSession(user.phone);
                       showToast(
-                        "Wallet synced with server! Checking latest deposits...",
-                        "success"
+                        "Wallet synced with server! If deposit is still missing, tap the 🚨 Dispute tab above.",
+                        "info"
                       );
                     }
                   }}
                   className="pv-btn-dark"
                   style={{ width: "100%", fontSize: 11, padding: "9px" }}
                 >
-                  ↻ Window Closed After Transfer? Tap to Sync Wallet
+                  ↻ Sync Wallet Balance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWalletTab("dispute")}
+                  className="pv-dispute-banner"
+                  style={{ marginBottom: 0 }}
+                >
+                  🚨 Sent Money &amp; Window Closed? Click Here to Report
+                  Payment
                 </button>
               </div>
             )}
@@ -3692,6 +3828,120 @@ export default function ThePixelVestMasterApp() {
               </form>
             )}
 
+            {walletTab === "dispute" && (
+              <form
+                onSubmit={handleSubmitPaymentDispute}
+                style={{ display: "flex", flexDirection: "column", gap: 9 }}
+              >
+                <div
+                  style={{
+                    backgroundColor: "#1f1216",
+                    border: "1px solid rgba(244,63,94,0.4)",
+                    borderRadius: 10,
+                    padding: 10,
+                    fontSize: 11.5,
+                    color: "#fda4af",
+                  }}
+                >
+                  <strong>🚨 Paystack Deposit Not Reflecting?</strong>
+                  <br />
+                  Fill in your transfer details below. Admin will verify your
+                  transfer and credit your Main Wallet directly!
+                </div>
+                <div>
+                  <label
+                    style={{
+                      fontSize: 11,
+                      color: "#9ca3af",
+                      display: "block",
+                      marginBottom: 3,
+                    }}
+                  >
+                    1. Amount Transferred (₦)
+                  </label>
+                  <input
+                    type="number"
+                    min={100}
+                    required
+                    placeholder="e.g. 500"
+                    value={disputeAmount}
+                    onChange={(e) => setDisputeAmount(e.target.value)}
+                    className="pv-input"
+                    style={{ width: "100%" }}
+                  />
+                </div>
+                <div>
+                  <label
+                    style={{
+                      fontSize: 11,
+                      color: "#9ca3af",
+                      display: "block",
+                      marginBottom: 3,
+                    }}
+                  >
+                    2. Sender Name &amp; Bank Used
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. John Doe - OPay / PalmPay"
+                    value={disputeSender}
+                    onChange={(e) => setDisputeSender(e.target.value)}
+                    className="pv-input"
+                    style={{ width: "100%" }}
+                  />
+                </div>
+                <div>
+                  <label
+                    style={{
+                      fontSize: 11,
+                      color: "#9ca3af",
+                      display: "block",
+                      marginBottom: 3,
+                    }}
+                  >
+                    3. Time Sent / Session ID or Note
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Sent at 2:15 PM via Paystack Transfer"
+                    value={disputeRefNote}
+                    onChange={(e) => setDisputeRefNote(e.target.value)}
+                    className="pv-input"
+                    style={{ width: "100%" }}
+                  />
+                </div>
+                <div>
+                  <label
+                    style={{
+                      fontSize: 11,
+                      color: "#9ca3af",
+                      display: "block",
+                      marginBottom: 3,
+                    }}
+                  >
+                    4. Attach Transfer Receipt Screenshot (Optional)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleDisputeProofUpload}
+                    style={{ fontSize: 11, width: "100%" }}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={disputeSubmitting}
+                  className="pv-btn-emerald"
+                  style={{ width: "100%", padding: "12px", marginTop: 4 }}
+                >
+                  {disputeSubmitting
+                    ? "Submitting Dispute..."
+                    : "SUBMIT PAYMENT DISPUTE NOW"}
+                </button>
+              </form>
+            )}
+
             {walletTab === "referrals" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <div className="pv-wallet-bonus">
@@ -3738,9 +3988,6 @@ export default function ThePixelVestMasterApp() {
         </div>
       )}
 
-      {/* ==================================================================== */}
-      {/* MODAL 5: ADMIN STUDIO (EDIT NODE + CREDIT USER + CASH OUTS)          */}
-      {/* ==================================================================== */}
       {showAdminModal && (
         <div className="pv-modal-backdrop">
           <div className="pv-modal-card">
@@ -3788,6 +4035,9 @@ export default function ThePixelVestMasterApp() {
                     if (adminPinInput.trim() === ADMIN_MASTER_PIN) {
                       setIsAdminUnlocked(true);
                       handleAdminLoadNode(editNodeId);
+                      handleAdminLoadAdSlot("top");
+                      fetchAdminWithdrawals();
+                      fetchAdminDisputes();
                       showToast("Admin Studio Unlocked!", "success");
                     } else {
                       showToast("Invalid Admin Password", "error");
@@ -3804,8 +4054,8 @@ export default function ThePixelVestMasterApp() {
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr",
-                    gap: 6,
+                    gridTemplateColumns: "repeat(5, 1fr)",
+                    gap: 4,
                     marginBottom: 14,
                   }}
                 >
@@ -3815,9 +4065,9 @@ export default function ThePixelVestMasterApp() {
                     className={
                       adminTab === "node" ? "pv-btn-emerald" : "pv-btn-dark"
                     }
-                    style={{ fontSize: 10, padding: "8px 4px" }}
+                    style={{ fontSize: 9, padding: "8px 2px" }}
                   >
-                    💎 Edit Node
+                    💎 Nodes
                   </button>
                   <button
                     type="button"
@@ -3825,9 +4075,9 @@ export default function ThePixelVestMasterApp() {
                     className={
                       adminTab === "wallet" ? "pv-btn-emerald" : "pv-btn-dark"
                     }
-                    style={{ fontSize: 10, padding: "8px 4px" }}
+                    style={{ fontSize: 9, padding: "8px 2px" }}
                   >
-                    💰 Credit User
+                    💰 Credit
                   </button>
                   <button
                     type="button"
@@ -3840,9 +4090,35 @@ export default function ThePixelVestMasterApp() {
                         ? "pv-btn-emerald"
                         : "pv-btn-dark"
                     }
-                    style={{ fontSize: 10, padding: "8px 4px" }}
+                    style={{ fontSize: 9, padding: "8px 2px" }}
                   >
-                    🏦 Cash Outs
+                    🏦 CashOut
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminTab("disputes");
+                      fetchAdminDisputes();
+                    }}
+                    className={
+                      adminTab === "disputes" ? "pv-btn-emerald" : "pv-btn-dark"
+                    }
+                    style={{ fontSize: 9, padding: "8px 2px" }}
+                  >
+                    🚨 Disputes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminTab("ads");
+                      handleAdminLoadAdSlot(adminAdSlotPos);
+                    }}
+                    className={
+                      adminTab === "ads" ? "pv-btn-emerald" : "pv-btn-dark"
+                    }
+                    style={{ fontSize: 9, padding: "8px 2px" }}
+                  >
+                    📢 Ads
                   </button>
                 </div>
 
@@ -3892,7 +4168,6 @@ export default function ThePixelVestMasterApp() {
                         </span>
                       </div>
                     </div>
-
                     <div>
                       <label
                         style={{
@@ -3913,7 +4188,6 @@ export default function ThePixelVestMasterApp() {
                         style={{ width: "100%" }}
                       />
                     </div>
-
                     <div>
                       <label
                         style={{
@@ -3940,7 +4214,6 @@ export default function ThePixelVestMasterApp() {
                         style={{ width: "100%" }}
                       />
                     </div>
-
                     <div>
                       <label
                         style={{
@@ -3967,7 +4240,6 @@ export default function ThePixelVestMasterApp() {
                         }}
                       />
                     </div>
-
                     <div>
                       <label
                         style={{
@@ -4000,7 +4272,6 @@ export default function ThePixelVestMasterApp() {
                         </button>
                       </div>
                     </div>
-
                     <button
                       type="submit"
                       disabled={adminSaving}
@@ -4044,7 +4315,6 @@ export default function ThePixelVestMasterApp() {
                         style={{ width: "100%" }}
                       />
                     </div>
-
                     <div>
                       <label
                         style={{
@@ -4071,7 +4341,6 @@ export default function ThePixelVestMasterApp() {
                         }}
                       />
                     </div>
-
                     <div className="pv-wallets-grid">
                       <button
                         type="button"
@@ -4096,7 +4365,6 @@ export default function ThePixelVestMasterApp() {
                         Play Bonus
                       </button>
                     </div>
-
                     <button
                       type="submit"
                       disabled={adminCrediting}
@@ -4125,7 +4393,6 @@ export default function ThePixelVestMasterApp() {
                         ? "Loading..."
                         : "Refresh Cash Out Requests"}
                     </button>
-
                     {withdrawalsList.length === 0 ? (
                       <p
                         style={{
@@ -4220,15 +4487,512 @@ export default function ThePixelVestMasterApp() {
                     )}
                   </div>
                 )}
+
+                {adminTab === "disputes" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <button
+                      type="button"
+                      onClick={fetchAdminDisputes}
+                      className="pv-btn-dark"
+                      style={{ width: "100%", fontSize: 11 }}
+                    >
+                      ↻{" "}
+                      {loadingDisputes
+                        ? "Loading..."
+                        : "Refresh Payment Disputes & Deposit Logs"}
+                    </button>
+                    <p
+                      style={{
+                        margin: "2px 0 0 0",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: "#fbbf24",
+                      }}
+                    >
+                      1. Player Payment Complaints ({disputesList.length})
+                    </p>
+                    {disputesList.length === 0 ? (
+                      <p
+                        style={{
+                          textAlign: "center",
+                          fontSize: 11.5,
+                          color: "#9ca3af",
+                          margin: "4px 0",
+                        }}
+                      >
+                        No payment dispute tickets submitted yet.
+                      </p>
+                    ) : (
+                      disputesList.map((d, idx) => (
+                        <div
+                          key={d.id || idx}
+                          style={{
+                            backgroundColor: "#0c0f16",
+                            border:
+                              d.status === "approved"
+                                ? "1px solid #10b981"
+                                : d.status === "rejected"
+                                ? "1px solid #ef4444"
+                                : "1px solid #fbbf24",
+                            borderRadius: 12,
+                            padding: 12,
+                            fontSize: 12,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              fontWeight: 900,
+                            }}
+                          >
+                            <span style={{ color: "#fbbf24", fontSize: 15 }}>
+                              Claim: ₦{Number(d.amount || 0).toLocaleString()}
+                            </span>
+                            <span
+                              style={{
+                                color:
+                                  d.status === "approved"
+                                    ? "#10b981"
+                                    : d.status === "rejected"
+                                    ? "#ef4444"
+                                    : "#fbbf24",
+                                textTransform: "uppercase",
+                                fontSize: 11,
+                              }}
+                            >
+                              {d.status || "pending"}
+                            </span>
+                          </div>
+                          <p
+                            style={{
+                              margin: "6px 0 2px 0",
+                              color: "#ffffff",
+                              fontWeight: 700,
+                            }}
+                          >
+                            Player: {d.user_phone} ({d.user_name || "Player"})
+                          </p>
+                          <p
+                            style={{
+                              margin: "0 0 4px 0",
+                              color: "#10b981",
+                              fontSize: 11,
+                              fontWeight: 700,
+                            }}
+                          >
+                            Sender: {d.sender_info}
+                          </p>
+                          <p
+                            style={{
+                              margin: "0 0 8px 0",
+                              color: "#9ca3af",
+                              fontSize: 11,
+                            }}
+                          >
+                            Ref/Note: {d.reference_note}
+                          </p>
+                          {d.proof_url && (
+                            <div style={{ marginBottom: 8 }}>
+                              <img
+                                src={d.proof_url}
+                                alt="Transfer Receipt"
+                                style={{
+                                  width: "100%",
+                                  maxHeight: 160,
+                                  objectFit: "contain",
+                                  borderRadius: 8,
+                                  border: "1px solid #262b38",
+                                }}
+                              />
+                            </div>
+                          )}
+                          {(!d.status || d.status === "pending") && (
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleResolveDispute(d, "approved")
+                                }
+                                className="pv-btn-emerald"
+                                style={{ flex: 2, fontSize: 11, padding: "8px" }}
+                              >
+                                ✅ Approve &amp; Credit ₦
+                                {Number(d.amount || 0).toLocaleString()}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleResolveDispute(d, "rejected")
+                                }
+                                className="pv-btn-logout"
+                                style={{ flex: 1, fontSize: 11, padding: "8px" }}
+                              >
+                                ❌ Reject
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+
+                    <p
+                      style={{
+                        margin: "8px 0 0 0",
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: "#34d399",
+                      }}
+                    >
+                      2. Initiated Checkouts (Opened Paystack Window:{" "}
+                      {initiatedDepositsList.length})
+                    </p>
+                    {initiatedDepositsList.length === 0 ? (
+                      <p
+                        style={{
+                          textAlign: "center",
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          margin: 0,
+                        }}
+                      >
+                        No uncompleted Paystack checkouts logged yet.
+                      </p>
+                    ) : (
+                      initiatedDepositsList.map((tx, idx) => (
+                        <div
+                          key={tx.id || idx}
+                          style={{
+                            backgroundColor: "#090d14",
+                            border: "1px solid #262b38",
+                            borderRadius: 10,
+                            padding: 10,
+                            fontSize: 11,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              fontWeight: 800,
+                            }}
+                          >
+                            <span style={{ color: "#ffffff" }}>
+                              📱 {tx.user_phone}
+                            </span>
+                            <span style={{ color: "#fbbf24" }}>
+                              ₦{Number(tx.amount || 0).toLocaleString()} (
+                              {tx.status})
+                            </span>
+                          </div>
+                          <p
+                            style={{
+                              margin: "4px 0 6px 0",
+                              color: "#9ca3af",
+                              fontSize: 10,
+                              wordBreak: "break-all",
+                            }}
+                          >
+                            Ref: {tx.reference}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAdminCreditPhone(String(tx.user_phone || ""));
+                              setAdminCreditAmount(String(tx.amount || 500));
+                              setAdminTab("wallet");
+                            }}
+                            className="pv-sector-btn"
+                            style={{
+                              width: "100%",
+                              padding: "6px",
+                              fontSize: 10.5,
+                            }}
+                          >
+                            💰 Load in Credit Tab to Top Up Player
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {adminTab === "ads" && (
+                  <form
+                    onSubmit={handleAdminSaveAdConfig}
+                    style={{ display: "flex", flexDirection: "column", gap: 10 }}
+                  >
+                    <p style={{ margin: 0, fontSize: 11.5, color: "#9ca3af" }}>
+                      Manage your Top &amp; Bottom horizontal banner spaces. Use
+                      Google AdSense OR upload a clickable sponsor banner image
+                      + link:
+                    </p>
+                    <div className="pv-wallets-grid" style={{ marginBottom: 2 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleAdminLoadAdSlot("top")}
+                        className={
+                          adminAdSlotPos === "top"
+                            ? "pv-sector-btn"
+                            : "pv-btn-dark"
+                        }
+                        style={{ fontSize: 11 }}
+                      >
+                        🔼 Top Banner Slot
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAdminLoadAdSlot("bottom")}
+                        className={
+                          adminAdSlotPos === "bottom"
+                            ? "pv-sector-btn"
+                            : "pv-btn-dark"
+                        }
+                        style={{ fontSize: 11 }}
+                      >
+                        🔽 Bottom Banner Slot
+                      </button>
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          display: "block",
+                          marginBottom: 4,
+                        }}
+                      >
+                        Select Ad Type for{" "}
+                        {adminAdSlotPos === "top" ? "Top" : "Bottom"} Slot:
+                      </label>
+                      <div className="pv-wallets-grid" style={{ marginBottom: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => setAdminAdMode("adsense")}
+                          className={
+                            adminAdMode === "adsense"
+                              ? "pv-btn-emerald"
+                              : "pv-btn-dark"
+                          }
+                          style={{ fontSize: 11, padding: "8px" }}
+                        >
+                          ⚡ Google AdSense
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAdminAdMode("custom")}
+                          className={
+                            adminAdMode === "custom"
+                              ? "pv-btn-emerald"
+                              : "pv-btn-dark"
+                          }
+                          style={{ fontSize: 11, padding: "8px" }}
+                        >
+                          🖼️ Image + Link Ad
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label
+                        style={{
+                          fontSize: 11,
+                          color: "#9ca3af",
+                          display: "block",
+                          marginBottom: 4,
+                        }}
+                      >
+                        Banner Header Label
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. SPONSORED BANNER AD"
+                        value={adminAdLabel}
+                        onChange={(e) => setAdminAdLabel(e.target.value)}
+                        className="pv-input"
+                        style={{ width: "100%" }}
+                      />
+                    </div>
+                    {adminAdMode === "adsense" ? (
+                      <>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              color: "#9ca3af",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            Paste Full Google AdSense HTML Code (Auto-Extracts
+                            IDs)
+                          </label>
+                          <textarea
+                            rows={3}
+                            placeholder="Paste <ins class='adsbygoogle' ...> code here or edit IDs below"
+                            value={adminAdCustomHtml}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              setAdminAdCustomHtml(raw);
+                              const clientMatch = raw.match(/ca-pub-\d+/i);
+                              const slotMatch = raw.match(
+                                /data-ad-slot=["'](\d+)["']/i
+                              );
+                              if (clientMatch)
+                                setAdminAdClientId(clientMatch[0]);
+                              if (slotMatch) setAdminAdSlotId(slotMatch[1]);
+                            }}
+                            className="pv-input"
+                            style={{
+                              width: "100%",
+                              fontSize: 11,
+                              fontFamily: "monospace",
+                            }}
+                          />
+                        </div>
+                        <div className="pv-wallets-grid" style={{ marginBottom: 0 }}>
+                          <div>
+                            <label
+                              style={{
+                                fontSize: 10,
+                                color: "#9ca3af",
+                                display: "block",
+                                marginBottom: 3,
+                              }}
+                            >
+                              Publisher Client ID
+                            </label>
+                            <input
+                              type="text"
+                              value={adminAdClientId}
+                              onChange={(e) =>
+                                setAdminAdClientId(e.target.value)
+                              }
+                              className="pv-input"
+                              style={{ width: "100%", fontSize: 11 }}
+                            />
+                          </div>
+                          <div>
+                            <label
+                              style={{
+                                fontSize: 10,
+                                color: "#9ca3af",
+                                display: "block",
+                                marginBottom: 3,
+                              }}
+                            >
+                              Ad Unit Slot ID
+                            </label>
+                            <input
+                              type="text"
+                              value={adminAdSlotId}
+                              onChange={(e) => setAdminAdSlotId(e.target.value)}
+                              className="pv-input"
+                              style={{ width: "100%", fontSize: 11 }}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              color: "#9ca3af",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            1. Upload Sponsor Banner Image (or Paste Image URL)
+                          </label>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                const img = new Image();
+                                img.onload = () => {
+                                  const canvas =
+                                    document.createElement("canvas");
+                                  canvas.width = 380;
+                                  canvas.height = 60;
+                                  const ctx = canvas.getContext("2d");
+                                  ctx?.drawImage(img, 0, 0, 380, 60);
+                                  setAdminAdImageUrl(
+                                    canvas.toDataURL("image/webp", 0.88)
+                                  );
+                                  showToast(
+                                    "Banner image uploaded & sized!",
+                                    "success"
+                                  );
+                                };
+                                img.src = ev.target?.result as string;
+                              };
+                              reader.readAsDataURL(file);
+                            }}
+                            style={{
+                              fontSize: 11,
+                              marginBottom: 6,
+                              width: "100%",
+                            }}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Or paste banner image URL (https://...)"
+                            value={adminAdImageUrl}
+                            onChange={(e) => setAdminAdImageUrl(e.target.value)}
+                            className="pv-input"
+                            style={{ width: "100%" }}
+                          />
+                        </div>
+                        <div>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              color: "#9ca3af",
+                              display: "block",
+                              marginBottom: 4,
+                            }}
+                          >
+                            2. Clickable Destination Link (Where Users Go When
+                            They Tap the Ad)
+                          </label>
+                          <input
+                            type="url"
+                            required
+                            placeholder="https://wa.me/234... or https://sponsorwebsite.com"
+                            value={adminAdTargetUrl}
+                            onChange={(e) =>
+                              setAdminAdTargetUrl(e.target.value)
+                            }
+                            className="pv-input"
+                            style={{ width: "100%" }}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={adminAdSaving}
+                      className="pv-btn-emerald"
+                      style={{ width: "100%", padding: "12px", marginTop: 4 }}
+                    >
+                      {adminAdSaving
+                        ? "Saving Ad Slot..."
+                        : `SAVE ${adminAdSlotPos.toUpperCase()} BANNER AD`}
+                    </button>
+                  </form>
+                )}
               </>
             )}
           </div>
         </div>
       )}
 
-      {/* ==================================================================== */}
-      {/* MODAL 6: TERMS & PRIVACY POLICY MODAL                                */}
-      {/* ==================================================================== */}
       {legalModal && (
         <div className="pv-modal-backdrop">
           <div className="pv-modal-card">
