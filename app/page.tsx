@@ -2716,7 +2716,7 @@ const handleAdminSaveAdConfig = async (e: React.FormEvent) => {
         </div>
 
         <p className="pv-subtitle">
-          1,000,000 Nodes • ₦22,000,000 Prize Vault (30% Win Rate!) • Tap 1 or
+          1,000,000 Nodes • ₦22,000,000 Prize Vault • Tap 1 or
           More Nodes (₦100)
         </p>
 
