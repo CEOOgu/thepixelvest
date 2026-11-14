@@ -2325,12 +2325,12 @@ export default function ThePixelVestMasterApp() {
     setAdminAdLabel(cfg.sponsor_label || "SPONSORED BANNER AD");
   };
 
-  const handleAdminSaveAdConfig = async (e: React.FormEvent) => {
+const handleAdminSaveAdConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminAdSaving(true);
 
-    const payload: SiteAdConfig = {
-      slot_position: adminAdSlotPos,
+    const topPayload: SiteAdConfig = {
+      slot_position: "top",
       ad_mode: adminAdMode,
       adsense_client: adminAdClientId.trim() || ADSENSE_CLIENT_ID,
       adsense_slot: adminAdSlotId.trim() || ADSENSE_UNIT_SLOT_ID,
@@ -2341,35 +2341,46 @@ export default function ThePixelVestMasterApp() {
       is_active: true,
     };
 
+    const bottomPayload: SiteAdConfig = {
+      ...topPayload,
+      slot_position: "bottom",
+    };
+
     try {
-      const updatedSiteAds = { ...siteAds, [adminAdSlotPos]: payload };
+      const updatedSiteAds = {
+        top: topPayload,
+        bottom: bottomPayload,
+      };
       setSiteAds(updatedSiteAds);
       localStorage.setItem("pixelvest_site_ads", JSON.stringify(updatedSiteAds));
 
       if (supabase) {
         await supabase
           .from("site_ads")
-          .upsert([payload], { onConflict: "slot_position" });
+          .upsert([topPayload, bottomPayload], { onConflict: "slot_position" });
 
-        const backupNodeId = adminAdSlotPos === "top" ? -501 : -502;
         await supabase.from("node_overrides").upsert([
           {
-            node_id: backupNodeId,
+            node_id: -501,
             brand_name: "SITE_AD_CONFIG",
-            logo_url: JSON.stringify(payload),
+            logo_url: JSON.stringify(topPayload),
+            custom_prize: 0,
+          },
+          {
+            node_id: -502,
+            brand_name: "SITE_AD_CONFIG",
+            logo_url: JSON.stringify(bottomPayload),
             custom_prize: 0,
           },
         ]);
       }
 
       showToast(
-        `✅ ${
-          adminAdSlotPos === "top" ? "Top" : "Bottom"
-        } Ad slot updated successfully!`,
+        "✅ Both Top & Bottom Banner Ads synced and updated!",
         "success"
       );
     } catch (e) {
-      showToast("Ad slot saved locally!", "success");
+      showToast("Ad slots saved locally!", "success");
     } finally {
       setAdminAdSaving(false);
     }
@@ -2573,16 +2584,26 @@ export default function ThePixelVestMasterApp() {
   return (
     <div className="pv-root">
       <style>{`
-        * { box-sizing: border-box; }
+      * {
+          box-sizing: border-box;
+          max-width: 100%;
+        }
         html, body, .pv-root {
-          margin: 0; padding: 0;
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
+          max-width: 100vw !important;
+          overflow-x: hidden !important;
+          overscroll-behavior-x: none !important;
+          touch-action: pan-y !important;
+          position: relative !important;
           background-color: #07090e !important;
           color: #ffffff !important;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
           -webkit-font-smoothing: antialiased;
           min-height: 100vh;
         }
-        .pv-container { max-width: 440px; margin: 0 auto; padding: 12px 14px 190px 14px; }
+        .pv-container { max-width: 430px; margin: 0 auto; padding: 8px 6px 190px 6px; }
         .pv-ticker { background-color: #082016; border: 1px solid rgba(16, 185, 129, 0.45); border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; text-align: center; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4); }
         .pv-ticker-text { margin: 0; color: #fbbf24 !important; font-weight: 800; font-size: 13px; line-height: 1.35; }
         .pv-header-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
@@ -2857,9 +2878,13 @@ export default function ThePixelVestMasterApp() {
           </button>
         </div>
 
-        <AdSenseBanner
-          config={siteAds.top}
-          defaultLabel="SPONSORED BANNER AD"
+     <AdSenseBanner
+          config={
+            siteAds.bottom?.ad_mode === "custom" && siteAds.bottom?.image_url
+              ? siteAds.bottom
+              : siteAds.top
+          }
+          defaultLabel="SPONSORED PARTNER AD"
         />
 
         <div>
