@@ -3300,9 +3300,7 @@ const handleAdminSaveAdConfig = async (e: React.FormEvent) => {
                     >
                       🔒 Node Permanently Locked (Sold)
                     </p>
-                    <p style={{ margin: 0, color: "#9ca3af" }}>
-                      Unlocked by: {soldInfo?.owner_name || "Player"}
-                    </p>
+                    
                   </div>
                   {isAdminUnlocked && (
                     <button
